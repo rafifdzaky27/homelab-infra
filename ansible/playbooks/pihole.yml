@@ -1,0 +1,75 @@
+---
+- hosts: dns2
+  become: true
+
+  roles:
+    - common
+    - docker
+
+  tasks:
+    - name: Pastikan direktori systemd-resolved drop-in ada
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        mode: "0755"
+
+    - name: Bebaskan port 53 dari systemd-resolved
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/no-stub.conf
+        content: |
+          [Resolve]
+          DNSStubListener=no
+        mode: "0644"
+      notify: restart systemd-resolved
+
+    - name: Arahkan resolv.conf ke resolver non-stub
+      ansible.builtin.file:
+        src: /run/systemd/resolve/resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+
+    # IMPORTANT:
+    # handler harus dijalankan SEKARANG, bukan di akhir play.
+    # Ini fix dari masalah port 53 AdGuard kemarin.
+    - name: Terapkan perubahan systemd-resolved sebelum Pi-hole start
+      ansible.builtin.meta: flush_handlers
+
+    - name: Buat direktori persistent Pi-hole
+      ansible.builtin.file:
+        path: /opt/pihole/etc
+        state: directory
+        mode: "0755"
+
+    - name: Jalankan Pi-hole
+      community.docker.docker_container:
+        name: pihole
+        image: pihole/pihole:2026.07.2
+        state: started
+        restart_policy: unless-stopped
+        network_mode: host
+
+        env:
+          TZ: "Asia/Jakarta"
+
+          # Pi-hole v6
+          FTLCONF_webserver_api_password: "{{ pihole_password }}"
+
+          # Cloudflare + Google, provider yang sama dengan AdGuard kita
+          FTLCONF_dns_upstreams: "1.1.1.1;8.8.8.8"
+
+          # Dengarkan query dari LAN
+          FTLCONF_dns_listeningMode: "all"
+
+        volumes:
+          - /opt/pihole/etc:/etc/pihole
+
+      no_log: true
+
+    - name: Izinkan DNS dan Web UI lewat UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop:
+        - "53"
+        - "80"

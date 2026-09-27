@@ -1,0 +1,67 @@
+# roles/caddy/tasks/main.yml
+---
+- name: Tambahkan repository resmi Caddy
+  ansible.builtin.shell: |
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+      | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+      > /etc/apt/sources.list.d/caddy-stable.list
+  args:
+    creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+
+- name: Install Caddy
+  ansible.builtin.apt:
+    name: caddy
+    update_cache: true
+    state: present
+
+- name: Render Caddyfile dari template
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    mode: '0644'
+  notify: restart caddy
+
+- name: Pastikan Caddy aktif
+  ansible.builtin.service:
+    name: caddy
+    state: started
+    enabled: true
+
+- name: Izinkan HTTP dan HTTPS untuk Caddy
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+
+- name: Render environment Cloudflare untuk Caddy
+  ansible.builtin.copy:
+    dest: /etc/caddy/caddy.env
+    content: "CF_API_TOKEN={{ cloudflare_dns_api_token }}\n"
+    owner: root
+    group: caddy
+    mode: "0640"
+  no_log: true
+  notify: restart caddy
+
+- name: Pastikan directory systemd drop-in ada
+  ansible.builtin.file:
+    path: /etc/systemd/system/caddy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Pasang systemd drop-in EnvironmentFile
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/caddy.service.d/environment.conf
+    content: |
+      [Service]
+      EnvironmentFile=/etc/caddy/caddy.env
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart caddy

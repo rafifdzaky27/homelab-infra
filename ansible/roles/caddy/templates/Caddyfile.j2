@@ -1,0 +1,59 @@
+{
+    # Aktifkan metrics globally; endpoint eksplisit ada di bawah.
+    metrics {
+        per_host
+    }
+}
+
+# Jellyfin Private — Tailscale only
+jellyfin-private.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.13:8096
+}
+
+# Jellyfin Shared — internal / Tailscale
+jellyfin-shared.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.26:8096
+}
+
+cloud.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.19:8090
+}
+
+ha.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.15:8123
+}
+
+# Management / Tailscale only
+grafana.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.16:3000
+}
+
+# Management / Tailscale only
+git.home.arpa {
+    tls internal
+    reverse_proxy 192.168.18.17:3000
+}
+
+# Endpoint metrics untuk Prometheus nanti
+http://metrics.home.arpa {
+    metrics
+}
+
+# Backend sementara untuk verifikasi P04
+test.home.arpa {
+    tls internal
+    reverse_proxy 127.0.0.1:5000
+}
+# Domain nyata — public CA via Cloudflare DNS-01
+test.rafifdzaky.com {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy 127.0.0.1:5000
+}

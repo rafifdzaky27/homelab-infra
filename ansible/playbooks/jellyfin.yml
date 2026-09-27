@@ -1,0 +1,8 @@
+# playbooks/jellyfin.yml - FULL FINAL FILE
+---
+- name: Configure isolated Jellyfin instances
+  hosts: media
+  become: true
+  roles:
+    - common
+    - jellyfin

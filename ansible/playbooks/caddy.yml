@@ -1,0 +1,8 @@
+# playbooks/caddy.yml
+---
+- hosts: proxy
+  become: true
+  roles:
+    - common
+    - docker   # backend whoami test + observer agent P10
+    - caddy

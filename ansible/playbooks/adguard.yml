@@ -1,0 +1,8 @@
+# playbooks/adguard.yml
+---
+- hosts: dns
+  become: true
+  roles:
+    - common
+    - docker
+    - adguard

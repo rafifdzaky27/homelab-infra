@@ -1,0 +1,22 @@
+# roles/docker/tasks/main.yml
+---
+- name: Install Docker Engine, Compose v2, dan Python SDK
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+      - python3-docker
+    state: present
+    update_cache: true
+
+- name: Pastikan Docker aktif saat boot
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Izinkan user lab memakai Docker tanpa sudo
+  ansible.builtin.user:
+    name: devops
+    groups: docker
+    append: true

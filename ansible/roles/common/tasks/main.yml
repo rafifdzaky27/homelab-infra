@@ -1,0 +1,58 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install paket dasar
+  ansible.builtin.apt:
+    name:
+      - curl
+      - vim
+      - htop
+      - ufw
+      - fail2ban
+    state: present
+
+- name: Pastikan QEMU Guest Agent tidak terpasang pada LXC
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: absent
+  when: ansible_virtualization_type == "lxc"
+
+- name: Install QEMU Guest Agent hanya pada VM
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: present
+  when: ansible_virtualization_type != "lxc"
+
+- name: Pastikan QEMU Guest Agent berjalan hanya pada VM
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    state: started
+  when: ansible_virtualization_type != "lxc"
+
+- name: Nonaktifkan login root via SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify: restart sshd
+
+- name: Nonaktifkan autentikasi password
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: restart sshd
+
+- name: Aktifkan firewall, izinkan SSH
+  community.general.ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+
+- name: Set kebijakan default firewall
+  community.general.ufw:
+    state: enabled
+    policy: deny

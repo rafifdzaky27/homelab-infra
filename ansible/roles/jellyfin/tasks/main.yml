@@ -1,0 +1,136 @@
+# roles/jellyfin/tasks/main.yml - FULL FINAL FILE
+---
+- name: Validate the pinned Jellyfin release
+  ansible.builtin.assert:
+    that:
+      - jellyfin_version is match('^[0-9]+[.][0-9]+[.][0-9]+$')
+      - ansible_distribution in ['Ubuntu', 'Debian']
+    fail_msg: "Set a tested stable jellyfin_version and use Ubuntu or Debian."
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+
+- name: Create the APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the Jellyfin signing key
+  ansible.builtin.get_url:
+    url: "{{ jellyfin_apt_key_url }}"
+    dest: /etc/apt/keyrings/jellyfin-team.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: jellyfin_signing_key
+
+- name: Inspect the dearmored Jellyfin keyring
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/jellyfin.gpg
+  register: jellyfin_keyring
+
+- name: Dearmor the Jellyfin signing key
+  ansible.builtin.command:
+    cmd: gpg --batch --yes --dearmor --output /etc/apt/keyrings/jellyfin.gpg /etc/apt/keyrings/jellyfin-team.asc
+  when: jellyfin_signing_key.changed or not jellyfin_keyring.stat.exists
+  changed_when: true
+
+- name: Read the Debian package architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: jellyfin_dpkg_arch
+  changed_when: false
+
+- name: Configure the official Jellyfin repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/jellyfin.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: https://repo.jellyfin.org/{{ ansible_distribution | lower }}
+      Suites: {{ ansible_distribution_release }}
+      Components: main
+      Architectures: {{ jellyfin_dpkg_arch.stdout }}
+      Signed-By: /etc/apt/keyrings/jellyfin.gpg
+
+- name: Refresh APT metadata after repository configuration
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Verify the pinned Jellyfin release exists in APT
+  ansible.builtin.command: apt-cache madison jellyfin
+  register: jellyfin_available_versions
+  changed_when: false
+  failed_when: jellyfin_version not in jellyfin_available_versions.stdout
+
+- name: Install the pinned Jellyfin release
+  ansible.builtin.apt:
+    name:
+      - "jellyfin={{ jellyfin_version }}*"
+      - "jellyfin-server={{ jellyfin_version }}*"
+      - "jellyfin-web={{ jellyfin_version }}*"
+    state: present
+    allow_downgrade: true
+    allow_change_held_packages: true
+
+- name: Hold Jellyfin packages until the pin is reviewed
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - jellyfin
+    - jellyfin-server
+    - jellyfin-web
+
+- name: Create isolated media-test directory
+  ansible.builtin.file:
+    path: /opt/jellyfin/media-test
+    state: directory
+    owner: jellyfin
+    group: jellyfin
+    mode: "0750"
+
+- name: Allow Jellyfin HTTP from the trusted LAN
+  community.general.ufw:
+    rule: allow
+    src: "192.168.18.0/24"
+    port: "8096"
+    proto: tcp
+
+- name: Ensure Jellyfin is active
+  ansible.builtin.systemd:
+    name: jellyfin
+    state: started
+    enabled: true
+
+- name: Read the installed Jellyfin package version
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f='${Version}' jellyfin-server
+  register: jellyfin_installed_version
+  changed_when: false
+
+- name: Validate the installed Jellyfin version
+  ansible.builtin.assert:
+    that:
+      - jellyfin_version in jellyfin_installed_version.stdout
+    fail_msg: >-
+      Installed Jellyfin version {{ jellyfin_installed_version.stdout }}
+      does not match pinned release {{ jellyfin_version }}
+    success_msg: >-
+      Installed Jellyfin package matches pinned release {{ jellyfin_version }}
+
+- name: Verify the installed Jellyfin version matches the pin
+  ansible.builtin.assert:
+    that: jellyfin_version in jellyfin_installed_version.stdout
+    fail_msg: "Installed Jellyfin does not match jellyfin_version."
+

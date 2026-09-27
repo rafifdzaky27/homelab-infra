@@ -1,0 +1,7 @@
+# roles/adguard/handlers/main.yml
+---
+- name: restart adguard
+  community.docker.docker_container:
+    name: adguardhome
+    state: started
+    restart: true

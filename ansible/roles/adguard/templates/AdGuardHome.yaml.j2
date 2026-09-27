@@ -1,0 +1,23 @@
+# roles/adguard/templates/AdGuardHome.yaml.j2
+http:
+  address: 0.0.0.0:3000
+users:
+  - name: devops
+    password: "{{ adguard_bcrypt_hash }}"
+dns:
+  bind_hosts: [0.0.0.0]
+  port: 53
+  upstream_dns:
+    - https://dns.cloudflare.com/dns-query
+    - https://dns.google/dns-query
+  bootstrap_dns: [1.1.1.1, 8.8.8.8]
+filtering:
+  rewrites:
+    - domain: "*.home.arpa"
+      answer: 192.168.1.14
+filters:
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    name: AdGuard DNS filter
+    id: 1
+schema_version: 29

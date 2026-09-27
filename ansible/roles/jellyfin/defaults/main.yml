@@ -1,0 +1,5 @@
+# roles/jellyfin/defaults/main.yml - FULL FINAL FILE
+---
+# Stable release yang diuji saat revisi 2026-08-27.
+jellyfin_version: "10.11.11"
+jellyfin_apt_key_url: "https://repo.jellyfin.org/jellyfin_team.gpg.key"

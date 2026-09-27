@@ -1,0 +1,46 @@
+---
+- name: Bootstrap LXC access
+  hosts: media
+  remote_user: root
+  gather_facts: false
+  vars:
+    devops_public_key: "{{ lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ssh/id_ed25519_homelab.pub') }}"
+  tasks:
+    - name: Install sudo
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+        update_cache: true
+
+    - name: Create devops user
+      ansible.builtin.user:
+        name: devops
+        shell: /bin/bash
+        groups: sudo
+        append: true
+        create_home: true
+
+    - name: Create devops SSH directory
+      ansible.builtin.file:
+        path: /home/devops/.ssh
+        state: directory
+        owner: devops
+        group: devops
+        mode: "0700"
+
+    - name: Install devops authorized key
+      ansible.builtin.copy:
+        dest: /home/devops/.ssh/authorized_keys
+        content: "{{ devops_public_key }}\n"
+        owner: devops
+        group: devops
+        mode: "0600"
+
+    - name: Install validated sudo policy
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/devops
+        content: "devops ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "/usr/sbin/visudo -cf %s"

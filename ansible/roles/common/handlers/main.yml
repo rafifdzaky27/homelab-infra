@@ -1,0 +1,11 @@
+# roles/common/handlers/main.yml — tanpa ini, "notify: restart sshd" di atas gagal diam-diam
+---
+- name: restart sshd
+  ansible.builtin.service:
+    name: ssh   # nama service di Ubuntu adalah "ssh", meski handler-nya boleh dinamai "restart sshd"
+    state: restarted
+
+- name: restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
