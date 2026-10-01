@@ -1,9 +1,28 @@
 ---
+# Newer rclone prints `rclone authorize` output as a base64url config blob ("eyJ...") instead
+# of the token JSON. Accept both: decode the blob, and if it wraps the token under a "token"
+# key, unwrap it. rclone.conf needs the plain token JSON on one line. (Ansible may turn the
+# JSON string into a mapping; the two uses below accept either.)
+- name: Normalise the rclone token to plain JSON
+  ansible.builtin.set_fact:
+    pitwall_rclone_token_json: >-
+      {%- set raw = pitwall_rclone_gdrive_token | string | trim -%}
+      {%- if raw.startswith('ey') -%}
+        {%- set b64 = raw | replace('-', '+') | replace('_', '/') -%}
+        {%- set raw = (b64 ~ ('=' * ((4 - (b64 | length) % 4) % 4))) | b64decode -%}
+      {%- endif -%}
+      {%- set obj = raw | from_json -%}
+      {%- if obj.token is defined -%}
+        {%- set obj = obj.token if obj.token is mapping else (obj.token | from_json) -%}
+      {%- endif -%}
+      {{ obj | to_json }}
+  no_log: true
+
 - name: Fail early when a backup secret is missing or too short
   ansible.builtin.assert:
     that:
       - pitwall_restic_password | length >= 32
-      - pitwall_rclone_gdrive_token is search('"refresh_token"')
+      - (pitwall_rclone_token_json if pitwall_rclone_token_json is string else pitwall_rclone_token_json | to_json) is search('"refresh_token"')
     quiet: true
   no_log: true
 
@@ -55,7 +74,7 @@
       [gdrive]
       type = drive
       scope = drive.file
-      token = {{ pitwall_rclone_gdrive_token | to_json if pitwall_rclone_gdrive_token is mapping else pitwall_rclone_gdrive_token }}
+      token = {{ pitwall_rclone_token_json if pitwall_rclone_token_json is string else pitwall_rclone_token_json | to_json }}
     owner: "{{ pitwall_user }}"
     group: "{{ pitwall_user }}"
     mode: "0600"
