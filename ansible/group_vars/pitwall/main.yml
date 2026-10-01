@@ -1,2 +1,4 @@
 ---
 pitwall_analytics_enabled: true
+pitwall_backup_ping_url: "https://hc-ping.com/<BACKUP-UUID>"
+pitwall_restore_test_ping_url: "https://hc-ping.com/<RESTORE-UUID>"
