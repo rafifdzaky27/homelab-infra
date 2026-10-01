@@ -1,0 +1,132 @@
+---
+- name: Fail early when a backup secret is missing or too short
+  ansible.builtin.assert:
+    that:
+      - pitwall_restic_password | length >= 32
+      - pitwall_rclone_gdrive_token is search('"refresh_token"')
+    quiet: true
+  no_log: true
+
+# acl: Ansible needs setfacl to become the unprivileged deploy user for the init tasks.
+- name: Install restic, rclone and acl
+  ansible.builtin.apt:
+    name: [restic, rclone, acl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the backup config directory (deploy user only)
+  ansible.builtin.file:
+    path: "{{ pitwall_backup_conf_dir }}"
+    state: directory
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0700"
+
+- name: Create the local restic repository directory
+  ansible.builtin.file:
+    path: "{{ pitwall_backup_repo }}"
+    state: directory
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0700"
+
+- name: Write the restic password file
+  ansible.builtin.copy:
+    dest: "{{ pitwall_backup_conf_dir }}/restic-password"
+    content: "{{ pitwall_restic_password }}\n"
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0400"
+  no_log: true
+
+- name: Create the rclone config directory
+  ansible.builtin.file:
+    path: "/home/{{ pitwall_user }}/.config/rclone"
+    state: directory
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0700"
+
+- name: Write the rclone GDrive remote (scope drive.file)
+  ansible.builtin.copy:
+    dest: "/home/{{ pitwall_user }}/.config/rclone/rclone.conf"
+    content: |
+      [gdrive]
+      type = drive
+      scope = drive.file
+      token = {{ pitwall_rclone_gdrive_token | to_json if pitwall_rclone_gdrive_token is mapping else pitwall_rclone_gdrive_token }}
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0600"
+    force: false # rclone rewrites the token on refresh; never overwrite a live one
+  no_log: true
+
+- name: Write the backup environment file
+  ansible.builtin.copy:
+    dest: "{{ pitwall_backup_conf_dir }}/env"
+    content: |
+      RESTIC_REPOSITORY={{ pitwall_backup_repo }}
+      RESTIC_PASSWORD_FILE={{ pitwall_backup_conf_dir }}/restic-password
+      RESTIC_OFFSITE_REPOSITORY={{ pitwall_backup_offsite_repo }}
+      COMPOSE_DIR={{ pitwall_root }}
+      TOLERANCE_PCT={{ pitwall_restore_tolerance_pct }}
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0600"
+
+- name: Initialise the local restic repository (once)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if restic cat config >/dev/null 2>&1; then echo exists; else restic init >/dev/null && echo created; fi
+  args:
+    executable: /bin/bash
+  environment:
+    RESTIC_REPOSITORY: "{{ pitwall_backup_repo }}"
+    RESTIC_PASSWORD_FILE: "{{ pitwall_backup_conf_dir }}/restic-password"
+  become_user: "{{ pitwall_user }}"
+  register: pitwall_restic_local
+  changed_when: "'created' in pitwall_restic_local.stdout"
+
+- name: Initialise the offsite restic repository on GDrive (once, same chunker params)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if restic -r "$OFFSITE" cat config >/dev/null 2>&1; then echo exists; else
+      restic -r "$OFFSITE" init --from-repo "$RESTIC_REPOSITORY" \
+        --from-password-file "$RESTIC_PASSWORD_FILE" --copy-chunker-params >/dev/null && echo created
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    OFFSITE: "{{ pitwall_backup_offsite_repo }}"
+    RESTIC_REPOSITORY: "{{ pitwall_backup_repo }}"
+    RESTIC_PASSWORD_FILE: "{{ pitwall_backup_conf_dir }}/restic-password"
+  become_user: "{{ pitwall_user }}"
+  register: pitwall_restic_offsite
+  changed_when: "'created' in pitwall_restic_offsite.stdout"
+
+- name: Install the backup and restore-test units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - pitwall-backup.service
+    - pitwall-backup.timer
+    - pitwall-restore-test.service
+    - pitwall-restore-test.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the timers see the new units
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - pitwall-backup.timer
+    - pitwall-restore-test.timer

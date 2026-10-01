@@ -1,0 +1,67 @@
+---
+- name: Fail early when a pitwall secret is missing or too short
+  ansible.builtin.assert:
+    that:
+      - pitwall_postgres_password | length >= 32
+      - pitwall_tunnel_token | length > 50
+    quiet: true
+  no_log: true
+
+- name: Fail early when analytics is on but an Umami secret is missing, short or unsafe
+  ansible.builtin.assert:
+    that:
+      - pitwall_umami_db_password | default('') | length >= 32
+      - pitwall_umami_db_password | default('') is match('^[A-Za-z0-9._~-]+$')
+      - pitwall_umami_app_secret | default('') | length >= 32
+    quiet: true
+  no_log: true
+  when: pitwall_analytics_enabled | bool
+
+- name: Create the CI deploy user (no password, no sudo)
+  ansible.builtin.user:
+    name: "{{ pitwall_user }}"
+    shell: /bin/bash
+    groups: docker
+    append: true
+    password_lock: true
+
+- name: Create .ssh for the deploy user
+  ansible.builtin.file:
+    path: "/home/{{ pitwall_user }}/.ssh"
+    state: directory
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0700"
+
+- name: Authorize only the CI key, with pty and forwarding disabled
+  ansible.builtin.copy:
+    dest: "/home/{{ pitwall_user }}/.ssh/authorized_keys"
+    content: "restrict {{ lookup('ansible.builtin.file', 'pitwall_deploy.pub') }}\n"
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0600"
+
+- name: Create the stack directory
+  ansible.builtin.file:
+    path: "{{ pitwall_root }}"
+    state: directory
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0750"
+
+- name: Render managed secrets into .env (deploy.sh owns the TAG= line)
+  ansible.builtin.blockinfile:
+    path: "{{ pitwall_root }}/.env"
+    create: true
+    owner: "{{ pitwall_user }}"
+    group: "{{ pitwall_user }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED: pitwall_host"
+    block: |
+      GHCR_OWNER={{ pitwall_ghcr_owner }}
+      POSTGRES_PASSWORD={{ pitwall_postgres_password }}
+      TUNNEL_TOKEN={{ pitwall_tunnel_token }}
+      COMPOSE_PROFILES={{ 'tunnel,analytics' if pitwall_analytics_enabled | bool else 'tunnel' }}
+      UMAMI_DB_PASSWORD={{ pitwall_umami_db_password | default('') if pitwall_analytics_enabled | bool else '' }}
+      UMAMI_APP_SECRET={{ pitwall_umami_app_secret | default('') if pitwall_analytics_enabled | bool else '' }}
+  no_log: true

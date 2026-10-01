@@ -1,0 +1,17 @@
+---
+# Pit Wall backups (M5 spec L5-1): nightly pg_dump -> restic (local) -> restic copy to GDrive,
+# plus a weekly restore test. The scripts ship with every deploy to /opt/pitwall/backup.
+pitwall_user: pitwall-deploy
+pitwall_root: /opt/pitwall
+pitwall_backup_conf_dir: /etc/pitwall-backup
+pitwall_backup_repo: /var/backups/pitwall-restic
+# rclone remote "gdrive" with scope drive.file: rclone only sees files it created itself.
+pitwall_backup_offsite_repo: "rclone:gdrive:pitwall-backups"
+pitwall_backup_on_calendar: "*-*-* 03:15:00"
+pitwall_restore_test_on_calendar: "Sun *-*-* 04:00:00"
+# The restore test runs a fresh backup first; 1% covers writes in the seconds between.
+pitwall_restore_tolerance_pct: 1
+# Dead-man's switches (healthchecks.io check URLs), pinged only on success, so a failing or
+# never-running job alerts by silence. Empty = no ping (runbook M5-6 sets both).
+pitwall_backup_ping_url: ""
+pitwall_restore_test_ping_url: ""

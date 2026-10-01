@@ -1,0 +1,10 @@
+[Unit]
+Description=Pit Wall nightly backup
+
+[Timer]
+OnCalendar={{ pitwall_backup_on_calendar }}
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

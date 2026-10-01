@@ -1,0 +1,10 @@
+---
+- name: Configure srv-pitwall-01 as the Pit Wall On-Call Docker host
+  hosts: pitwall
+  become: true
+  roles:
+    - common
+    - docker
+    - pitwall_host
+    - role: pitwall_backup
+      tags: [backup]

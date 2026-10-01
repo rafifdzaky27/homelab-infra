@@ -1,0 +1,9 @@
+[Unit]
+Description=Pit Wall weekly restore test
+
+[Timer]
+OnCalendar={{ pitwall_restore_test_on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

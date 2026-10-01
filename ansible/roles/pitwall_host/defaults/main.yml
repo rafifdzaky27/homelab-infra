@@ -1,0 +1,6 @@
+---
+pitwall_user: pitwall-deploy
+pitwall_root: /opt/pitwall
+pitwall_ghcr_owner: rafifdzaky27
+# M5: Umami (compose profile "analytics"). deploy.sh creates its database on the next deploy.
+pitwall_analytics_enabled: false

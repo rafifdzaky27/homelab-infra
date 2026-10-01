@@ -1,0 +1,20 @@
+[Unit]
+Description=Pit Wall nightly backup (pg_dump -> restic -> GDrive)
+Wants=network-online.target
+After=network-online.target docker.service
+# At boot the compose postgres may not be up yet: retry, but not forever.
+StartLimitIntervalSec=2h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+User={{ pitwall_user }}
+EnvironmentFile={{ pitwall_backup_conf_dir }}/env
+ExecStart=/bin/bash {{ pitwall_root }}/backup/backup.sh
+{% if pitwall_backup_ping_url %}
+ExecStartPost=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null {{ pitwall_backup_ping_url }}
+{% endif %}
+Restart=on-failure
+RestartSec=10min
+Nice=10
+IOSchedulingClass=idle
