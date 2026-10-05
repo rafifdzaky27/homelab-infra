@@ -81,6 +81,35 @@
       TZ={{ opengym_timezone }}
   register: opengym_api_env
 
+# The web image renders /etc/nginx/templates/default.conf.template at start-up. Take that file
+# from the pinned image itself (so a version bump picks up upstream's new template), add one
+# location so HEAD /api/health answers 200, and mount the result over the original.
+- name: Read the nginx template shipped in the pinned web image
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm --entrypoint cat
+      ghcr.io/duartesantos8/opengym-web:{{ opengym_version }}
+      /etc/nginx/templates/default.conf.template
+  register: opengym_upstream_tpl
+  changed_when: false
+  check_mode: false
+
+- name: Fail when upstream moved the /api/ location the HEAD fix hooks into
+  ansible.builtin.assert:
+    that:
+      - opengym_upstream_tpl.stdout.split(opengym_api_location_anchor) | length == 2
+    fail_msg: "Upstream nginx template changed at {{ opengym_version }}; review files/head-health.conf before deploying."
+    quiet: true
+
+- name: Render the nginx template with HEAD /api/health
+  ansible.builtin.copy:
+    dest: "{{ opengym_root }}/web.conf.template"
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0644"
+    content: "{{ opengym_upstream_tpl.stdout | replace(opengym_api_location_anchor, lookup('ansible.builtin.file', 'head-health.conf') ~ '\n\n' ~ opengym_api_location_anchor) }}\n"
+  register: opengym_web_tpl
+
 - name: Start the stack
   community.docker.docker_compose_v2:
     project_src: "{{ opengym_root }}"
@@ -90,6 +119,15 @@
     # and recreates only what changed. `always` restarted cloudflared on an api.env change and
     # took the site down long enough for UptimeRobot to alert.
     recreate: auto
+
+# Compose does not hash bind-mounted file contents, so a changed template needs an explicit
+# restart of web only. cloudflared stays up; the site blips for a second or two.
+- name: Restart web to load a changed nginx template
+  community.docker.docker_compose_v2:
+    project_src: "{{ opengym_root }}"
+    services: [web]
+    state: restarted
+  when: opengym_web_tpl.changed
 
 # Not `wait: true`: the images' HEALTHCHECK runs every 5 minutes, so compose --wait sits in
 # "starting" that long. Ask the app itself, through nginx, the same path the tunnel uses.
