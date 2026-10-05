@@ -57,6 +57,10 @@ Simpan semua secret ke password manager.
 Repo ini publik. Pastikan `vault.yml` terenkripsi (baris pertama `$ANSIBLE_VAULT`) sebelum `git add`.
 
 ## 3. Deploy VM (Ansible)
+Repo di `/mnt/c` itu world-writable, jadi Ansible mengabaikan `ansible.cfg`. Set dulu, dan ulangi di tiap terminal WSL baru:
+```bash
+export ANSIBLE_CONFIG=$PWD/ansible.cfg   # jalankan dari folder ansible
+```
 ```bash
 ansible-playbook playbooks/fitness.yml --ask-vault-pass --check --diff
 ansible-playbook playbooks/fitness.yml --ask-vault-pass
