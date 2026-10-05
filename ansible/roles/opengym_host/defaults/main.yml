@@ -19,3 +19,5 @@ opengym_audit_ip: "net"
 # Hard kill switch for the AI coach; nothing in this deployment uses it.
 opengym_coach_disabled: true
 opengym_media_quota_mb: 200
+# Line in upstream web/nginx.conf.template that files/head-health.conf is inserted above.
+opengym_api_location_anchor: "    location ^~ ${BASE_PATH}/api/ {"

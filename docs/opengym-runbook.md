@@ -127,7 +127,7 @@ Verify: buka situsnya di private tab, coba Create profile. Harus minta invite co
 Commit `main.yml` dan `vault.yml` (terenkripsi), lalu push.
 
 ## 9. Monitor UptimeRobot (browser)
-- Tipe **HTTP(s) - Keyword**, URL `https://gym.rafifdzaky.com/api/health`, keyword `"ok":true` (must exist), interval 5 menit.
+- Tipe **HTTP(s) - Keyword** atau HTTP(s) biasa (HEAD juga dijawab 200, lihat `files/head-health.conf`), URL `https://gym.rafifdzaky.com/api/health`, keyword `"ok":true` (must exist), interval 5 menit.
 - Alert ke email dan push app, sama seperti Pitwall dan portfolio. Kirim test notification.
 
 ## 10. Uji backup

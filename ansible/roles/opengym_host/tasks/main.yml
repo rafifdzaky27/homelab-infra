@@ -19,13 +19,20 @@
     mode: "0750"
 
 # The api runs as root in its image and owns everything under data/.
-- name: Create the data and media directories
+- name: Create the data directory
+  ansible.builtin.file:
+    path: "{{ opengym_root }}/data"
+    state: directory
+    mode: "0750"
+
+# nginx in the web container runs as uid 101 and must traverse and read these (0750 gave 403).
+# The exercise images are public anyway: the app serves them to every visitor.
+- name: Create the media directories
   ansible.builtin.file:
     path: "{{ opengym_root }}/{{ item }}"
     state: directory
-    mode: "0750"
+    mode: "0755"
   loop:
-    - data
     - media
     - media/img
     - media/gif
@@ -74,12 +81,53 @@
       TZ={{ opengym_timezone }}
   register: opengym_api_env
 
+# The web image renders /etc/nginx/templates/default.conf.template at start-up. Take that file
+# from the pinned image itself (so a version bump picks up upstream's new template), add one
+# location so HEAD /api/health answers 200, and mount the result over the original.
+- name: Read the nginx template shipped in the pinned web image
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm --entrypoint cat
+      ghcr.io/duartesantos8/opengym-web:{{ opengym_version }}
+      /etc/nginx/templates/default.conf.template
+  register: opengym_upstream_tpl
+  changed_when: false
+  check_mode: false
+
+- name: Fail when upstream moved the /api/ location the HEAD fix hooks into
+  ansible.builtin.assert:
+    that:
+      - opengym_upstream_tpl.stdout.split(opengym_api_location_anchor) | length == 2
+    fail_msg: "Upstream nginx template changed at {{ opengym_version }}; review files/head-health.conf before deploying."
+    quiet: true
+
+- name: Render the nginx template with HEAD /api/health
+  ansible.builtin.copy:
+    dest: "{{ opengym_root }}/web.conf.template"
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0644"
+    content: "{{ opengym_upstream_tpl.stdout | replace(opengym_api_location_anchor, lookup('ansible.builtin.file', 'head-health.conf') ~ '\n\n' ~ opengym_api_location_anchor) }}\n"
+  register: opengym_web_tpl
+
 - name: Start the stack
   community.docker.docker_compose_v2:
     project_src: "{{ opengym_root }}"
     state: present
     pull: missing
-    recreate: "{{ 'always' if (opengym_compose.changed or opengym_env.changed or opengym_api_env.changed) else 'auto' }}"
+    # auto, not always: compose hashes each service's resolved config (env_file content included)
+    # and recreates only what changed. `always` restarted cloudflared on an api.env change and
+    # took the site down long enough for UptimeRobot to alert.
+    recreate: auto
+
+# Compose does not hash bind-mounted file contents, so a changed template needs an explicit
+# restart of web only. cloudflared stays up; the site blips for a second or two.
+- name: Restart web to load a changed nginx template
+  community.docker.docker_compose_v2:
+    project_src: "{{ opengym_root }}"
+    services: [web]
+    state: restarted
+  when: opengym_web_tpl.changed
 
 # Not `wait: true`: the images' HEALTHCHECK runs every 5 minutes, so compose --wait sits in
 # "starting" that long. Ask the app itself, through nginx, the same path the tunnel uses.
@@ -92,3 +140,5 @@
   delay: 5
   until: opengym_health.rc == 0 and '"ok":true' in opengym_health.stdout
   changed_when: false
+  # In --check the command is skipped and has no rc, so `until` would retry 30 times for nothing.
+  when: not ansible_check_mode

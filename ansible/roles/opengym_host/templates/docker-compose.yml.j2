@@ -61,6 +61,8 @@ services:
       CF_CONNECTING_IP: "$$http_cf_connecting_ip"
       MEDIA_UPLOAD_MAX: 48m
     volumes:
+      # Upstream template + HEAD /api/health (roles/opengym_host/files/head-health.conf).
+      - ./web.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./media/img:/usr/share/nginx/html/img:ro
       - ./media/gif:/usr/share/nginx/html/gif:ro
     networks: [opengym]
