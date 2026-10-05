@@ -2,148 +2,166 @@
 
 VM `srv-fit-01` (192.168.18.27). URL `https://fit.rafifdzaky.com`, hanya internal.
 Jalur: iPhone → Tailscale → Caddy (.14) → VM .27 port 3004.
+Terraform di PowerShell. Ansible di WSL. Ikuti urutan, jangan lompat langkah.
 
-Terraform dijalankan di PowerShell. Ansible dijalankan di WSL. Semua dari clone repo ini.
+## Yang sudah diuji sebelum runbook ini ditulis
 
-## Hasil validasi (5 Okt 2026)
+Diuji nyata di Ubuntu 24.04 dengan Docker:
+- Stack `v1.7.3` dari template kita: 3 container healthy, `/api/health` UP, halaman web 200.
+- Daftar akun lewat origin `https://fit.rafifdzaky.com`: berhasil, akun dengan `sparky_admin_email` otomatis admin. Origin lain ditolak (403).
+- Login tanpa header Origin (cara aplikasi mobile): berhasil.
+- `SPARKY_FITNESS_DISABLE_SIGNUP=true`: pendaftaran baru ditolak.
+- Backup dan restore test: `backup ok`, restore 109 dari 109 tabel, `restore test ok`. Snapshot memakai path tetap sehingga retensi bekerja.
+- Aturan DOCKER-USER: sumber yang diizinkan dapat 200, sumber lain timeout. Aturan tidak dobel saat dijalankan dua kali dan tetap ada setelah Docker restart.
+- Modul `docker_compose_v2` jalan dan idempotent. `ansible-playbook --syntax-check` lolos.
+- Caddyfile lengkap lolos `caddy validate` dengan modul Cloudflare.
+- Tag `v1.7.3` adalah rilis terbaru di Docker Hub (28 Sep 2026). Compose cocok dengan compose upstream di tag itu.
 
-Sudah dicek ke sumber:
-- Tag Docker Hub: `v1.7.3` adalah rilis terbaru untuk `sparkyfitness_server` dan `sparkyfitness` (diunggah 28 Sep 2026). `latest` menunjuk ke digest yang sama. Seri `v0.x` sudah lama.
-- Compose di tag `v1.7.3` (`docker/docker-compose.prod.yml`): nama service, env, port `3004:80`, mount `/var/lib/postgresql`, image `postgres:18.3-alpine`, dan healthcheck DB sudah dicocokkan dengan template kita.
-- `.env.example` dan halaman environment variables di docs resmi: nama env dan cara generate secret dicocokkan.
-- Aplikasi iOS ada di App Store. Docs resmi menyebut aplikasi mobile butuh HTTPS.
-- Template Ansible dirender dengan Ansible asli, `ansible-playbook --syntax-check` lolos untuk `fitness.yml` dan `caddy.yml`. YAML compose hasil render valid.
+Tidak bisa diuji dari luar homelab (ada cek di langkah terkait):
+- Caddyfile live di srv-proxy-01 sama dengan template repo (langkah 6).
+- Record DNS dan sertifikat publik (langkah 6 dan 7).
+- Aplikasi iOS ke servermu (langkah 9).
 
-Belum bisa dicek dari sini (cek sendiri saat deploy):
-- Perintah `terraform plan` dan `apply` (Terraform tidak tersedia di sesi ini). File `fitness.tf` hanya beda nama, IP, dan RAM dari `pitwall.tf`.
-- Perilaku aturan DOCKER-USER di VM. Karena itu ada tes negatif di langkah 6.
-- Login aplikasi iOS ke server kita. Docs resmi tidak merinci langkahnya.
-- RAM 2048 MB masih perlu kamu cocokkan dengan tabel RAM playbook.
-
-## 0. Ambil branch
-```powershell
-git fetch origin
-git checkout feat/sparkyfitness-srv-fit-01
+## 0. Persiapan terminal WSL (tiap buka terminal baru)
+```bash
+cd /mnt/c/Users/Rafif/Downloads/homelab-infra
+git fetch origin && git checkout feat/sparkyfitness-srv-fit-01 && git pull
+cd ansible
+export ANSIBLE_CONFIG=$PWD/ansible.cfg
+ansible-galaxy collection list 2>/dev/null | grep -E "community\.(docker|general)"
 ```
+Kenapa `ANSIBLE_CONFIG`: folder di `/mnt/c` world-writable, jadi Ansible mengabaikan `ansible.cfg` (inventory dan roles hilang).
+Expected: dua collection muncul. Kalau tidak: `ansible-galaxy collection install -r requirements.yml`.
 
 ## 1. Buat VM (Terraform, PowerShell)
 ```powershell
-cd terraform
+cd C:\Users\Rafif\Downloads\homelab-infra\terraform
 terraform plan
 ```
-Expected: hanya `proxmox_vm_qemu.fitness` yang ditambah. Tidak ada VM lain berubah.
-Kalau ada perubahan lain, berhenti dan kirim outputnya.
+Expected: hanya `proxmox_vm_qemu.fitness` yang ditambah. Kalau ada perubahan lain, berhenti.
 ```powershell
 terraform apply
 ```
-Verify (WSL): `ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27` berhasil. Ketik `yes` untuk menerima host key, lalu `exit`. Ansible butuh langkah ini dulu. Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED", jalankan `ssh-keygen -R 192.168.18.27` lalu ulangi.
 
-## 2. Buat secret (WSL)
+## 2. SSH pertama ke VM (WSL, wajib sebelum Ansible)
 ```bash
-cd ansible
+ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27 'cloud-init status --wait; hostname'
+```
+- Ketik `yes` saat ditanya host key. Ansible tidak bisa menjawab prompt ini sendiri.
+- `cloud-init status --wait` menunggu cloud-init selesai, supaya apt tidak terkunci saat Ansible jalan.
+- Expected: `status: done` lalu `srv-fit-01`.
+- Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED": `ssh-keygen -R 192.168.18.27`, lalu ulangi.
+
+## 3. Buat secret (WSL)
+```bash
 cp group_vars/fitness/vault.yml.example group_vars/fitness/vault.yml
-openssl rand -hex 32                                   # sparky_api_encryption_key (64 hex)
+openssl rand -hex 32                                   # sparky_api_encryption_key
 openssl rand -base64 32                                # sparky_better_auth_secret
-openssl rand -base64 36 | tr -d '/+=' | cut -c1-40     # tiap password (3 kali)
-nano group_vars/fitness/vault.yml
+openssl rand -base64 36 | tr -d '/+=' | cut -c1-40     # sparky_db_password, sparky_app_db_password, sparky_restic_password
+nano group_vars/fitness/vault.yml                      # isi juga sparky_admin_email
 ansible-vault encrypt group_vars/fitness/vault.yml
+head -1 group_vars/fitness/vault.yml                   # harus $ANSIBLE_VAULT;1.1;AES256
 ```
-Isi `sparky_admin_email` dengan email loginmu.
-Simpan semua secret ke password manager.
-- `BETTER_AUTH_SECRET` tidak boleh berubah setelah 2FA aktif, kalau tidak kamu terkunci.
-- API encryption key tidak boleh berubah, kalau tidak data provider eksternal tidak terbaca.
-- Password DB hanya dibaca saat database pertama dibuat. Jangan diubah setelahnya.
+- Pakai password vault yang SAMA dengan `group_vars/all/vault.yml`. `--ask-vault-pass` hanya menerima satu password.
+- Simpan semua secret di password manager.
+- `BETTER_AUTH_SECRET`, API key, dan password DB tidak boleh berubah setelah deploy pertama.
+- Repo ini publik. Jangan `git add` vault yang belum terenkripsi.
 
-Repo ini publik. Pastikan `vault.yml` terenkripsi (baris pertama `$ANSIBLE_VAULT`) sebelum `git add`.
-
-## 3. Deploy VM (Ansible)
-Repo di `/mnt/c` itu world-writable, jadi Ansible mengabaikan `ansible.cfg`. Set dulu, dan ulangi di tiap terminal WSL baru:
+## 4. Deploy pertama (tanpa --check)
 ```bash
-export ANSIBLE_CONFIG=$PWD/ansible.cfg   # jalankan dari folder ansible
-```
-```bash
-ansible-playbook playbooks/fitness.yml --ask-vault-pass --check --diff
 ansible-playbook playbooks/fitness.yml --ask-vault-pass
 ```
-Verify di VM:
-```bash
-ssh devops@192.168.18.27
-docker ps                      # 3 container Up, sparkyfitness-db healthy
-sudo iptables -S DOCKER-USER   # ada aturan DROP untuk port 3004
-```
+Jangan pakai `--check` di VM baru. Mode check tidak benar-benar menjalankan `apt update`, jadi paket seperti `fail2ban` terlihat "tidak ada", dan Docker belum terpasang untuk task berikutnya. Ini yang tadi gagal. VM masih kosong, jadi run langsung aman.
+Expected: `failed=0`. Pull image pertama butuh beberapa menit.
 
-## 4. DNS
-- AdGuard (.11): `ansible-playbook playbooks/adguard.yml --ask-vault-pass`. Template sudah punya rewrite `fit.rafifdzaky.com` → 192.168.18.14.
-- Pi-hole (.12): tambah manual di Local DNS Records: `fit.rafifdzaky.com` → `192.168.18.14`. Harus sama dengan AdGuard.
-- Jangan buat record publik di Cloudflare. Jangan buat wildcard `*.rafifdzaky.com` di DNS lokal.
-
-## 5. Caddy
-```bash
-ansible-playbook playbooks/caddy.yml --ask-vault-pass
-```
 Verify:
 ```bash
-dig +short fit.rafifdzaky.com @192.168.18.11     # 192.168.18.14
-dig +short fit.rafifdzaky.com @192.168.18.12     # 192.168.18.14
-curl -I https://fit.rafifdzaky.com               # 200, sertifikat valid
+ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27 \
+  'docker ps --format "{{.Names}} {{.Status}}"; sudo iptables -S DOCKER-USER; systemctl list-timers "sparky*" --no-pager; curl -s http://192.168.18.27:3004/api/health'
 ```
-Kalau sertifikat gagal terbit, cek `journalctl -u caddy -n 50` di srv-proxy-01. Token Cloudflare harus bisa edit DNS zone `rafifdzaky.com`.
+Expected: 3 container `healthy`, satu baris `DROP` dengan `! -s 192.168.18.14/32 ... 3004`, dua timer sparky, dan `{"status":"UP"}`.
 
-## 6. Tes negatif (wajib)
-Dari PC (bukan .14), port 3004 harus ditolak:
+## 5. Tes firewall (wajib, sebelum Caddy dan DNS)
+Dari WSL (bukan .14), harus timeout:
 ```bash
-curl -m 5 http://192.168.18.27:3004     # harus timeout
+curl -m 5 http://192.168.18.27:3004 ; echo "exit=$?"     # expected exit=28
 ```
-Dari srv-proxy-01, harus tembus:
+Dari srv-proxy-01, harus 200:
 ```bash
-curl -I http://192.168.18.27:3004       # 200
+ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.14 'curl -s -o /dev/null -w "%{http_code}\n" http://192.168.18.27:3004/'
 ```
-Dari luar jaringan tanpa Tailscale, `https://fit.rafifdzaky.com` tidak boleh bisa dibuka.
-Kalau tes pertama tembus, berhenti. Aturan DOCKER-USER tidak bekerja dan port terbuka ke LAN.
+Kalau tes pertama dapat 200, berhenti. Port terbuka ke LAN.
 
-## 7. Akun pertama
-1. Buka `https://fit.rafifdzaky.com`, daftar dengan email admin yang sama dengan `sparky_admin_email`.
-2. Ubah `sparky_disable_signup: true` di `ansible/group_vars/fitness/main.yml`.
-3. Jalankan ulang `ansible-playbook playbooks/fitness.yml --ask-vault-pass`.
-4. Cek bahwa pendaftaran baru tertutup.
+## 6. Caddy
+Cek dulu bedanya dengan Caddyfile live:
+```bash
+ansible-playbook playbooks/caddy.yml --ask-vault-pass --check --diff
+```
+Expected: diff Caddyfile hanya menambah blok `fit.rafifdzaky.com`. Kalau ada baris lain yang berubah atau terhapus, berhenti dan kirim diff-nya. Artinya Caddyfile live beda dengan repo.
+Kalau aman:
+```bash
+ansible-playbook playbooks/caddy.yml --ask-vault-pass
+curl -sI --resolve fit.rafifdzaky.com:443:192.168.18.14 https://fit.rafifdzaky.com | head -1
+```
+Expected: `HTTP/2 200` tanpa `-k`. Ini membuktikan sertifikat publik dan Caddy sebelum DNS lokal dipasang (pola P04 Step 9).
+Kalau gagal: `ssh devops@192.168.18.14 'journalctl -u caddy -n 50 --no-pager'`.
 
-## 8. iPhone
-1. Tailscale aktif.
+## 7. DNS lokal (manual di UI, kedua resolver)
+Jangan jalankan `adguard.yml`. Template AdGuard di repo menimpa seluruh config live dan masih menjawab `*.home.arpa` ke `192.168.1.14`. Menjalankannya bisa mematikan semua nama `home.arpa`.
+- AdGuard `http://192.168.18.11:3000` → Filters → DNS rewrites → Add: `fit.rafifdzaky.com` → `192.168.18.14`.
+- Pi-hole `http://192.168.18.12/admin` → Settings → Local DNS Records → `fit.rafifdzaky.com` → `192.168.18.14`.
+- Jangan buat record publik di Cloudflare. Jangan buat wildcard `*.rafifdzaky.com`.
+Verify:
+```bash
+dig +short @192.168.18.11 fit.rafifdzaky.com     # 192.168.18.14
+dig +short @192.168.18.12 fit.rafifdzaky.com     # 192.168.18.14
+dig +short @1.1.1.1 fit.rafifdzaky.com           # kosong
+curl -sI https://fit.rafifdzaky.com | head -1     # HTTP/2 200
+```
+
+## 8. Akun pertama dan tutup pendaftaran
+1. Buka `https://fit.rafifdzaky.com`. Daftar dengan email yang sama dengan `sparky_admin_email`. Akun ini otomatis admin.
+2. Ubah `sparky_disable_signup: true` di `group_vars/fitness/main.yml`.
+3. Jalankan:
+```bash
+ansible-playbook playbooks/fitness.yml --ask-vault-pass --check --diff   # sekarang --check aman
+ansible-playbook playbooks/fitness.yml --ask-vault-pass
+```
+4. Coba daftar akun lain. Expected: "Signups are currently disabled by the administrator."
+5. Commit perubahan `main.yml` dan `vault.yml` (terenkripsi), lalu push.
+
+## 9. iPhone
+1. Tailscale aktif. Playbook mengatur DNS Tailscale ke .11 dan .12 dengan Override DNS, jadi nama ini ter-resolve lewat Tailscale.
 2. Install SparkyFitness dari App Store: https://apps.apple.com/us/app/sparkyfitness/id6757314392
-3. Isi server URL `https://fit.rafifdzaky.com`, lalu login.
-4. Aktifkan sinkron Apple Health. Beri izin berat badan dan langkah.
-Kalau gagal konek, buka laporan diagnostik di bagian bawah halaman pengaturan aplikasi, dan kirim ke aku.
+3. Server URL `https://fit.rafifdzaky.com`, lalu login.
+4. Aktifkan Apple Health. Izinkan berat badan dan langkah.
+5. Matikan Wi-Fi rumah, pakai data seluler + Tailscale, buka app lagi. Harus tetap jalan.
+Kalau gagal, buka laporan diagnostik di bawah halaman Settings aplikasi dan kirim ke aku.
 
-## 9. Data awal
-Isi profil dan target 79.9 kg pada 25 Nov 2026. Lalu input berat dari tracker:
+## 10. Data awal
+Profil dan target 79.9 kg pada 25 Nov 2026. Berat dari tracker:
 19 Sep 89.2, 20 Sep 89.1, 26 Sep 88.3, 27 Sep 87.35, 28 Sep 87.8, 3 Okt 87.95, 4 Okt 87.05, 5 Okt 87.0.
 Lingkar perut: 25 Sep 103.5, 27 Sep 97, 5 Okt 100.
 
-## 10. Uji backup
+## 11. Uji backup
 ```bash
-ssh devops@192.168.18.27
-sudo systemctl start sparky-backup.service && journalctl -u sparky-backup -n 20
-sudo restic -r /var/backups/sparky-restic --password-file /etc/sparky-backup/restic-password snapshots
-sudo systemctl start sparky-restore-test.service && journalctl -u sparky-restore-test -n 20
+ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27
+sudo systemctl start sparky-backup.service; journalctl -u sparky-backup -n 5 --no-pager
+sudo systemctl start sparky-restore-test.service; journalctl -u sparky-restore-test -n 5 --no-pager
 ```
-Expected: `backup ok` dan `restore test ok`.
-Backup offsite (GDrive) belum aktif. Isi `sparky_backup_offsite_repo` setelah rclone remote siap.
+Expected: `backup ok`, lalu `tables live=N restored=N` dan `restore test ok`.
+Backup masih lokal di disk VM. Backup ke GDrive (`sparky_backup_offsite_repo`) menyusul setelah rclone remote siap.
 
 ## Upgrade versi
-Docs resmi: backup database dan `.env` dulu. Lalu:
-1. Jalankan `sudo systemctl start sparky-backup.service`.
-2. Cek tag baru di Docker Hub dan baca catatan rilis di GitHub.
-3. Ubah `sparky_version` di `ansible/roles/sparky_host/defaults/main.yml`.
-4. Jalankan `fitness.yml`.
+1. `sudo systemctl start sparky-backup.service` di VM.
+2. Cek tag baru di Docker Hub dan catatan rilis di GitHub SparkyFitness.
+3. Ubah `sparky_version` di `roles/sparky_host/defaults/main.yml`, lalu jalankan `fitness.yml`.
 
 ## Rollback
 ```bash
-ssh devops@192.168.18.27 "cd /opt/sparky && docker compose down"
+ssh devops@192.168.18.27 'cd /opt/sparky && docker compose down'
 ```
-Hapus blok `fit.rafifdzaky.com` dari Caddyfile, lalu jalankan ulang `caddy.yml`.
-Hapus VM: hapus `terraform/fitness.tf`, lalu `terraform apply`. Data ikut hilang, jadi simpan backup dulu.
-
-## Catatan
-- Rewrite AdGuard lama `*.home.arpa` menjawab `192.168.1.14`, bukan `192.168.18.14`. Mungkin typo atau subnet lama. Tidak diubah di PR ini.
-- Jangan `apt upgrade` paket caddy di srv-proxy-01 kalau binary-nya hasil build kustom dengan plugin Cloudflare.
-- Header IP asli dan jumlah proxy (`SPARKY_FITNESS_TRUSTED_PROXY_HOPS`) tidak diatur. Untuk satu pengguna di jaringan privat ini tidak berpengaruh.
+Hapus blok `fit.rafifdzaky.com` dari Caddyfile, jalankan `caddy.yml`, lalu hapus record DNS di AdGuard dan Pi-hole.
+Hapus VM: hapus `terraform/fitness.tf`, lalu `terraform apply`. Data ikut hilang, simpan backup dulu.
+Unit firewall sengaja tidak menghapus aturannya saat di-stop. Hapus manual kalau perlu:
+`sudo iptables -D DOCKER-USER ! -s 192.168.18.14 -p tcp -m conntrack --ctorigdstport 3004 --ctdir ORIGINAL -j DROP`

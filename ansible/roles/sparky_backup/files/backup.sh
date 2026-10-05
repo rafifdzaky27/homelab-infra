@@ -4,20 +4,21 @@ set -euo pipefail
 exec 9>/run/lock/sparky-backup.lock
 flock -n 9 || { echo "another backup is running"; exit 1; }
 
-: "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD_FILE:?}" "${COMPOSE_DIR:?}"
-STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
+: "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD_FILE:?}" "${COMPOSE_DIR:?}" "${STAGE_DIR:?}" "${DB_USER:?}" "${DB_NAME:?}"
+# Fixed staging path: restic forget groups snapshots by path, so a random temp dir would never prune.
+find "$STAGE_DIR" -mindepth 1 -delete
+trap 'find "$STAGE_DIR" -mindepth 1 -delete' EXIT
 
-set -a; . "$COMPOSE_DIR/.env"; set +a
-docker exec sparkyfitness-db pg_dump -U "$SPARKY_FITNESS_DB_USER" -d "$SPARKY_FITNESS_DB_NAME" -Fc > "$STAGE/sparky.dump"
-test -s "$STAGE/sparky.dump"
-cp "$COMPOSE_DIR/.env" "$STAGE/env"
+docker exec sparkyfitness-db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc > "$STAGE_DIR/sparky.dump"
+test -s "$STAGE_DIR/sparky.dump"
+# .env holds BETTER_AUTH_SECRET and the API encryption key; both are needed for a real restore.
+cp "$COMPOSE_DIR/.env" "$STAGE_DIR/env"
 
-restic backup "$STAGE" --tag sparky --host srv-fit-01
-restic forget --tag sparky --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+restic backup "$STAGE_DIR" --tag sparky --host srv-fit-01
+restic forget --tag sparky --host srv-fit-01 --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 
 if [ -n "${RESTIC_OFFSITE_REPOSITORY:-}" ]; then
-  restic copy --from-repo "$RESTIC_REPOSITORY" --from-password-file "$RESTIC_PASSWORD_FILE" \
-    -r "$RESTIC_OFFSITE_REPOSITORY" --tag sparky latest
+  restic -r "$RESTIC_OFFSITE_REPOSITORY" copy --from-repo "$RESTIC_REPOSITORY" \
+    --from-password-file "$RESTIC_PASSWORD_FILE" --tag sparky latest
 fi
 echo "backup ok"

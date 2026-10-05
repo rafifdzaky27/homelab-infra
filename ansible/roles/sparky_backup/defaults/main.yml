@@ -5,6 +5,9 @@ sparky_root: /opt/sparky
 sparky_user: devops
 sparky_backup_conf_dir: /etc/sparky-backup
 sparky_backup_repo: /var/backups/sparky-restic
+sparky_backup_stage_dir: /var/backups/sparky-stage
+sparky_db_user: sparky
+sparky_db_name: sparkyfitness_db
 sparky_backup_offsite_repo: ""   # e.g. "rclone:gdrive:sparky-backups"; empty = local only
 sparky_backup_on_calendar: "*-*-* 03:30:00"
 sparky_restore_test_on_calendar: "Sun *-*-* 04:30:00"

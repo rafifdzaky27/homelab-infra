@@ -6,9 +6,10 @@
     quiet: true
   no_log: true
 
-- name: Install restic and rclone
+# acl: Ansible needs setfacl to become the unprivileged user for the restic init task.
+- name: Install restic, rclone and acl
   ansible.builtin.apt:
-    name: [restic, rclone]
+    name: [restic, rclone, acl]
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -24,6 +25,14 @@
 - name: Create the local restic repository directory
   ansible.builtin.file:
     path: "{{ sparky_backup_repo }}"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0700"
+
+- name: Create the fixed staging directory (fixed path keeps restic forget grouping stable)
+  ansible.builtin.file:
+    path: "{{ sparky_backup_stage_dir }}"
     state: directory
     owner: "{{ sparky_user }}"
     group: "{{ sparky_user }}"
@@ -65,6 +74,9 @@
       RESTIC_PASSWORD_FILE={{ sparky_backup_conf_dir }}/restic-password
       RESTIC_OFFSITE_REPOSITORY={{ sparky_backup_offsite_repo }}
       COMPOSE_DIR={{ sparky_root }}
+      STAGE_DIR={{ sparky_backup_stage_dir }}
+      DB_USER={{ sparky_db_user }}
+      DB_NAME={{ sparky_db_name }}
       PG_IMAGE={{ sparky_postgres_image }}
     owner: "{{ sparky_user }}"
     group: "{{ sparky_user }}"
