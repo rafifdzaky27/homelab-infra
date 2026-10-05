@@ -97,6 +97,8 @@ Cek dulu bedanya dengan Caddyfile live:
 ```bash
 ansible-playbook playbooks/caddy.yml --ask-vault-pass --check --diff
 ```
+**Peringatan insiden 2026-10-05:** penerapan `caddy.yml` untuk SparkyFitness menghapus blok portfolio port 8081 yang sebelumnya hanya ada di Caddyfile live, lalu portfolio mendapat 502. Check mode tidak menerapkan perubahan; gunakan diff sebagai gate sebelum apply. Baca [runbook Caddy](caddy-runbook.md). Caddyfile server sepenuhnya dimiliki Ansible; jangan edit manual. STOP jika diff mengubah atau menghapus baris di luar perubahan yang dimaksudkan.
+
 Expected: diff Caddyfile hanya menambah blok `fit.rafifdzaky.com`. Kalau ada baris lain yang berubah atau terhapus, berhenti dan kirim diff-nya. Artinya Caddyfile live beda dengan repo.
 Kalau aman:
 ```bash
