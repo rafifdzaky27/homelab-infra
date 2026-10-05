@@ -55,7 +55,7 @@ ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 'cloud-init status --wait;
 2. Di layar install, pilih Docker. Salin **token** saja (teks panjang setelah `--token`, diawali `eyJ`). Jangan jalankan perintahnya.
 3. Tab **Public Hostname** → Add:
    - Subdomain `gym`, domain `rafifdzaky.com`
-   - Service type `HTTP`, URL `web:80`
+   - Service type **`HTTP`** (bukan HTTPS), URL `web:80`
 4. Save. Cloudflare membuat record DNS `gym` sendiri.
 
 Tunnel terpisah dari Pitwall dan portfolio, jadi masalah di satu tunnel tidak menjatuhkan yang lain.
@@ -88,7 +88,7 @@ ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 \
 ```
 Expected: `api` dan `web` Up, `media` Exited (0), `cloudflared` Up dengan log `Registered tunnel connection` (4 baris), dan dua timer opengym.
 
-Tidak ada port terbuka ke LAN. Harus gagal (connection refused):
+Tidak ada port terbuka ke LAN. Harus gagal (timeout, karena UFW default deny):
 ```bash
 curl -m 5 http://192.168.18.28 ; curl -m 5 http://192.168.18.28:8080 ; echo "exit=$?"
 ```
