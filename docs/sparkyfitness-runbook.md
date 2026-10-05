@@ -143,6 +143,13 @@ Profil dan target 79.9 kg pada 25 Nov 2026. Berat dari tracker:
 19 Sep 89.2, 20 Sep 89.1, 26 Sep 88.3, 27 Sep 87.35, 28 Sep 87.8, 3 Okt 87.95, 4 Okt 87.05, 5 Okt 87.0.
 Lingkar perut: 25 Sep 103.5, 27 Sep 97, 5 Okt 100.
 
+### Water container (wajib agar tombol air aktif di iPhone)
+1. Buka `https://fit.rafifdzaky.com` di browser, masuk, lalu Settings > Nutrition & Diet.
+2. Buka kartu Water Tracking, cari Manage Water Containers.
+3. Tab Water. Isi nama (misal `Botol 600`), volume `600`, unit `ml`, servings `1`.
+4. Klik Add Container. Container pertama otomatis jadi Primary.
+5. Buka ulang app iPhone. Tombol tambah air aktif.
+
 ## 11. Uji backup
 ```bash
 ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27
