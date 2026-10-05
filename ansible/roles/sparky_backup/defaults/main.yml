@@ -1,0 +1,13 @@
+---
+# SparkyFitness backups: nightly pg_dump + .env -> local restic, weekly restore test.
+# Offsite copy is optional until an rclone remote exists (runbook, phase 2).
+sparky_root: /opt/sparky
+sparky_user: devops
+sparky_backup_conf_dir: /etc/sparky-backup
+sparky_backup_repo: /var/backups/sparky-restic
+sparky_backup_offsite_repo: ""   # e.g. "rclone:gdrive:sparky-backups"; empty = local only
+sparky_backup_on_calendar: "*-*-* 03:30:00"
+sparky_restore_test_on_calendar: "Sun *-*-* 04:30:00"
+sparky_backup_ping_url: ""
+sparky_restore_test_ping_url: ""
+sparky_postgres_image: "postgres:18.3-alpine"

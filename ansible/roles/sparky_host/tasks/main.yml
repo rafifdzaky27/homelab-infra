@@ -1,0 +1,78 @@
+---
+- name: Fail early when a SparkyFitness secret is missing or too short
+  ansible.builtin.assert:
+    that:
+      - sparky_db_password | length >= 32
+      - sparky_app_db_password | length >= 32
+      - sparky_api_encryption_key is match('^[0-9a-f]{64}$')
+      - sparky_better_auth_secret | length >= 32
+      - sparky_db_password is match('^[A-Za-z0-9._~-]+$')
+      - sparky_app_db_password is match('^[A-Za-z0-9._~-]+$')
+    quiet: true
+  no_log: true
+
+- name: Create the stack directory
+  ansible.builtin.file:
+    path: "{{ sparky_root }}"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0750"
+
+- name: Render the compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ sparky_root }}/docker-compose.yml"
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0644"
+  register: sparky_compose
+
+# BETTER_AUTH_SECRET must never change after 2FA is enabled; the API key must never change
+# once users store provider keys. Both are backed up with the restic snapshot (see sparky_backup).
+- name: Render .env
+  ansible.builtin.copy:
+    dest: "{{ sparky_root }}/.env"
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0600"
+    content: |
+      SPARKY_FITNESS_DB_NAME={{ sparky_db_name }}
+      SPARKY_FITNESS_DB_USER={{ sparky_db_user }}
+      SPARKY_FITNESS_DB_PASSWORD={{ sparky_db_password }}
+      SPARKY_FITNESS_APP_DB_USER={{ sparky_app_db_user }}
+      SPARKY_FITNESS_APP_DB_PASSWORD={{ sparky_app_db_password }}
+      SPARKY_FITNESS_API_ENCRYPTION_KEY={{ sparky_api_encryption_key }}
+      BETTER_AUTH_SECRET={{ sparky_better_auth_secret }}
+      SPARKY_FITNESS_FRONTEND_URL={{ sparky_frontend_url }}
+      SPARKY_FITNESS_DISABLE_SIGNUP={{ sparky_disable_signup | bool | lower }}
+      SPARKY_FITNESS_ADMIN_EMAIL={{ sparky_admin_email }}
+      SPARKY_FITNESS_LOG_LEVEL={{ sparky_log_level }}
+      TZ={{ sparky_timezone }}
+  no_log: true
+  register: sparky_env
+
+- name: Install the DOCKER-USER restriction unit
+  ansible.builtin.template:
+    src: sparky-docker-user.service.j2
+    dest: /etc/systemd/system/sparky-docker-user.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so systemd sees the unit
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the DOCKER-USER restriction before the stack starts
+  ansible.builtin.systemd_service:
+    name: sparky-docker-user.service
+    enabled: true
+    state: started
+
+- name: Start the stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ sparky_root }}"
+    state: present
+    pull: missing
+    recreate: "{{ 'always' if (sparky_compose.changed or sparky_env.changed) else 'auto' }}"

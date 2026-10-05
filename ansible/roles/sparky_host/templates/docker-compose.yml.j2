@@ -1,0 +1,71 @@
+# Managed by Ansible (roles/sparky_host). Do not edit on the host.
+services:
+  sparkyfitness-db:
+    image: {{ sparky_postgres_image }}
+    container_name: sparkyfitness-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SPARKY_FITNESS_DB_NAME}
+      POSTGRES_USER: ${SPARKY_FITNESS_DB_USER}
+      POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+    volumes:
+      # Postgres 18 images expect the mount at /var/lib/postgresql, not .../data.
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [sparky]
+
+  sparkyfitness-server:
+    image: codewithcj/sparkyfitness_server:{{ sparky_version }}
+    container_name: sparkyfitness-server
+    restart: unless-stopped
+    depends_on:
+      sparkyfitness-db:
+        condition: service_healthy
+    environment:
+      SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_FITNESS_LOG_LEVEL}
+      ALLOW_PRIVATE_NETWORK_CORS: "false"
+      SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS: ""
+      SPARKY_FITNESS_DB_USER: ${SPARKY_FITNESS_DB_USER}
+      SPARKY_FITNESS_DB_HOST: sparkyfitness-db
+      SPARKY_FITNESS_DB_NAME: ${SPARKY_FITNESS_DB_NAME}
+      SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+      SPARKY_FITNESS_APP_DB_USER: ${SPARKY_FITNESS_APP_DB_USER}
+      SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_FITNESS_APP_DB_PASSWORD}
+      SPARKY_FITNESS_DB_PORT: "5432"
+      SPARKY_FITNESS_API_ENCRYPTION_KEY: ${SPARKY_FITNESS_API_ENCRYPTION_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+      SPARKY_FITNESS_DISABLE_SIGNUP: ${SPARKY_FITNESS_DISABLE_SIGNUP}
+      SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_FITNESS_ADMIN_EMAIL}
+      SPARKY_FITNESS_SERVER_PORT: "3010"
+      TZ: ${TZ}
+    volumes:
+      - server_uploads:/app/SparkyFitnessServer/uploads
+      - server_backup:/app/SparkyFitnessServer/backup
+    networks: [sparky]
+
+  sparkyfitness-frontend:
+    image: codewithcj/sparkyfitness:{{ sparky_version }}
+    container_name: sparkyfitness-frontend
+    restart: unless-stopped
+    depends_on: [sparkyfitness-server]
+    environment:
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+      SPARKY_FITNESS_SERVER_HOST: sparkyfitness-server
+      SPARKY_FITNESS_SERVER_PORT: "3010"
+    ports:
+      # Bound to the VM IP only. UFW does not filter Docker ports; see the DOCKER-USER unit.
+      - "{{ sparky_bind_ip }}:{{ sparky_frontend_port }}:80"
+    networks: [sparky]
+
+networks:
+  sparky:
+
+volumes:
+  db_data:
+  server_uploads:
+  server_backup:

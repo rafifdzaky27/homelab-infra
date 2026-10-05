@@ -57,3 +57,11 @@ test.rafifdzaky.com {
 
     reverse_proxy 127.0.0.1:5000
 }
+
+# SparkyFitness - internal only (no public A record, no tunnel). Public cert via DNS-01.
+fit.rafifdzaky.com {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    reverse_proxy 192.168.18.27:3004
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=SparkyFitness nightly backup
+
+[Timer]
+OnCalendar={{ sparky_backup_on_calendar }}
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
