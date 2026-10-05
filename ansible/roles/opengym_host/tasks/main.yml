@@ -19,13 +19,20 @@
     mode: "0750"
 
 # The api runs as root in its image and owns everything under data/.
-- name: Create the data and media directories
+- name: Create the data directory
+  ansible.builtin.file:
+    path: "{{ opengym_root }}/data"
+    state: directory
+    mode: "0750"
+
+# nginx in the web container runs as uid 101 and must traverse and read these (0750 gave 403).
+# The exercise images are public anyway: the app serves them to every visitor.
+- name: Create the media directories
   ansible.builtin.file:
     path: "{{ opengym_root }}/{{ item }}"
     state: directory
-    mode: "0750"
+    mode: "0755"
   loop:
-    - data
     - media
     - media/img
     - media/gif
