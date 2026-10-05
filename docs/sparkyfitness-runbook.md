@@ -36,7 +36,7 @@ Kalau ada perubahan lain, berhenti dan kirim outputnya.
 ```powershell
 terraform apply
 ```
-Verify: `ssh devops@192.168.18.27` berhasil.
+Verify (WSL): `ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27` berhasil. Ketik `yes` untuk menerima host key, lalu `exit`. Ansible butuh langkah ini dulu. Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED", jalankan `ssh-keygen -R 192.168.18.27` lalu ulangi.
 
 ## 2. Buat secret (WSL)
 ```bash
