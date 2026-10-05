@@ -1,0 +1,21 @@
+---
+opengym_root: /opt/opengym
+opengym_user: devops
+# Pin image tags. Upstream compose pulls :latest, which this repo forbids.
+# 1.4.0 (planned Jan 2027) moves storage to a database and is a compatibility break:
+# read its upgrade notes and take a backup before bumping past 1.3.x.
+opengym_version: "1.3.9"
+opengym_cloudflared_image: "cloudflare/cloudflared:2026.9.3"
+opengym_media_image: "alpine/git:v2.54.0"
+opengym_domain: "gym.rafifdzaky.com"
+opengym_rp_name: "openGym"
+opengym_timezone: "Asia/Jakarta"
+# Comma-separated user ids from data/db.json. Empty until your own profile exists.
+opengym_admin_uids: ""
+opengym_invite_only: false
+opengym_session_days: 90
+# Network part only (x.x.x.0/24), never the full address.
+opengym_audit_ip: "net"
+# Hard kill switch for the AI coach; nothing in this deployment uses it.
+opengym_coach_disabled: true
+opengym_media_quota_mb: 200

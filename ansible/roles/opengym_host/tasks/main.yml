@@ -1,0 +1,94 @@
+---
+- name: Fail early when an openGym secret is missing or a setting is unsafe
+  ansible.builtin.assert:
+    that:
+      - opengym_tunnel_token | length > 50
+      - opengym_tunnel_token is not search('CHANGE-ME')
+      - opengym_domain is match('^[a-z0-9.-]+$')
+      - not (opengym_invite_only | bool) or (opengym_admin_uids | length > 0)
+    fail_msg: "Check opengym_tunnel_token in the vault, and set opengym_admin_uids before invite_only."
+    quiet: true
+  no_log: true
+
+- name: Create the stack directory
+  ansible.builtin.file:
+    path: "{{ opengym_root }}"
+    state: directory
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0750"
+
+# The api runs as root in its image and owns everything under data/.
+- name: Create the data and media directories
+  ansible.builtin.file:
+    path: "{{ opengym_root }}/{{ item }}"
+    state: directory
+    mode: "0750"
+  loop:
+    - data
+    - media
+    - media/img
+    - media/gif
+
+- name: Render the compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ opengym_root }}/docker-compose.yml"
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0644"
+  register: opengym_compose
+
+# Compose interpolation only: the tunnel token reaches cloudflared and nothing else.
+- name: Render .env (tunnel token)
+  ansible.builtin.copy:
+    dest: "{{ opengym_root }}/.env"
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0600"
+    content: |
+      TUNNEL_TOKEN={{ opengym_tunnel_token }}
+  no_log: true
+  register: opengym_env
+
+# RP_ID and ORIGIN must be the public hostname exactly; changing them later
+# invalidates every registered passkey.
+- name: Render api.env (app settings, no secrets)
+  ansible.builtin.copy:
+    dest: "{{ opengym_root }}/api.env"
+    owner: "{{ opengym_user }}"
+    group: "{{ opengym_user }}"
+    mode: "0640"
+    content: |
+      RP_ID={{ opengym_domain }}
+      ORIGIN=https://{{ opengym_domain }}
+      RP_NAME={{ opengym_rp_name }}
+      ADMIN_UIDS={{ opengym_admin_uids }}
+      INVITE_ONLY={{ '1' if opengym_invite_only | bool else '' }}
+      ALLOW_GUEST=0
+      SESSION_DAYS={{ opengym_session_days }}
+      AUDIT_IP={{ opengym_audit_ip }}
+      COACH_DISABLED={{ '1' if opengym_coach_disabled | bool else '' }}
+      MEDIA_QUOTA_MB={{ opengym_media_quota_mb }}
+      VAPID_SUBJECT=https://{{ opengym_domain }}
+      TZ={{ opengym_timezone }}
+  register: opengym_api_env
+
+- name: Start the stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ opengym_root }}"
+    state: present
+    pull: missing
+    recreate: "{{ 'always' if (opengym_compose.changed or opengym_env.changed or opengym_api_env.changed) else 'auto' }}"
+
+# Not `wait: true`: the images' HEALTHCHECK runs every 5 minutes, so compose --wait sits in
+# "starting" that long. Ask the app itself, through nginx, the same path the tunnel uses.
+- name: Wait until web answers /api/health through nginx
+  ansible.builtin.command:
+    cmd: docker compose exec -T web wget -qO- http://127.0.0.1/api/health
+    chdir: "{{ opengym_root }}"
+  register: opengym_health
+  retries: 30
+  delay: 5
+  until: opengym_health.rc == 0 and '"ok":true' in opengym_health.stdout
+  changed_when: false

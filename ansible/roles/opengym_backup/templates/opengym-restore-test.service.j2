@@ -1,0 +1,18 @@
+[Unit]
+Description=openGym weekly restore test
+Wants=network-online.target
+After=network-online.target docker.service
+StartLimitIntervalSec=2h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+EnvironmentFile={{ opengym_backup_conf_dir }}/env
+ExecStartPre=/bin/bash {{ opengym_root }}/backup/backup.sh
+ExecStart=/bin/bash {{ opengym_root }}/backup/restore-test.sh
+{% if opengym_restore_test_ping_url %}
+ExecStartPost=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null {{ opengym_restore_test_ping_url }}
+{% endif %}
+Restart=on-failure
+RestartSec=10min
+Nice=10

@@ -1,0 +1,110 @@
+---
+- name: Fail early when the restic password is missing or short
+  ansible.builtin.assert:
+    that:
+      - opengym_restic_password | length >= 32
+      - opengym_restic_password is not search('CHANGE-ME')
+    quiet: true
+  no_log: true
+
+- name: Install restic and rclone
+  ansible.builtin.apt:
+    name: [restic, rclone]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# Root only: the api writes data/ as root, and data/secret and vapid.json are 0600.
+- name: Create the backup config directory
+  ansible.builtin.file:
+    path: "{{ opengym_backup_conf_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create the local restic repository directory
+  ansible.builtin.file:
+    path: "{{ opengym_backup_repo }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create the backup scripts directory
+  ansible.builtin.file:
+    path: "{{ opengym_root }}/backup"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install the backup scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ opengym_root }}/backup/{{ item }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - backup.sh
+    - restore-test.sh
+
+- name: Write the restic password file
+  ansible.builtin.copy:
+    dest: "{{ opengym_backup_conf_dir }}/restic-password"
+    content: "{{ opengym_restic_password }}\n"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+
+- name: Write the backup environment file
+  ansible.builtin.copy:
+    dest: "{{ opengym_backup_conf_dir }}/env"
+    content: |
+      RESTIC_REPOSITORY={{ opengym_backup_repo }}
+      RESTIC_PASSWORD_FILE={{ opengym_backup_conf_dir }}/restic-password
+      RESTIC_OFFSITE_REPOSITORY={{ opengym_backup_offsite_repo }}
+      DATA_DIR={{ opengym_root }}/data
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Initialise the local restic repository (once)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if restic cat config >/dev/null 2>&1; then echo exists; else restic init >/dev/null && echo created; fi
+  args:
+    executable: /bin/bash
+  environment:
+    RESTIC_REPOSITORY: "{{ opengym_backup_repo }}"
+    RESTIC_PASSWORD_FILE: "{{ opengym_backup_conf_dir }}/restic-password"
+  register: opengym_restic_local
+  changed_when: "'created' in opengym_restic_local.stdout"
+
+- name: Install the backup and restore-test units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - opengym-backup.service
+    - opengym-backup.timer
+    - opengym-restore-test.service
+    - opengym-restore-test.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the timers see the new units
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - opengym-backup.timer
+    - opengym-restore-test.timer
