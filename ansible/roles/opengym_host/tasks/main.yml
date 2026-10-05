@@ -99,3 +99,5 @@
   delay: 5
   until: opengym_health.rc == 0 and '"ok":true' in opengym_health.stdout
   changed_when: false
+  # In --check the command is skipped and has no rc, so `until` would retry 30 times for nothing.
+  when: not ansible_check_mode
