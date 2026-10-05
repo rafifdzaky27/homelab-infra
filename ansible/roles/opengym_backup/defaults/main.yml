@@ -1,0 +1,11 @@
+---
+# openGym backups: nightly restic snapshot of data/ (JSON files, no database), weekly restore test.
+# Offsite copy is optional until an rclone remote exists (same as SparkyFitness).
+opengym_root: /opt/opengym
+opengym_backup_conf_dir: /etc/opengym-backup
+opengym_backup_repo: /var/backups/opengym-restic
+opengym_backup_offsite_repo: ""   # e.g. "rclone:gdrive:opengym-backups"; empty = local only
+opengym_backup_on_calendar: "*-*-* 03:45:00"
+opengym_restore_test_on_calendar: "Sun *-*-* 04:45:00"
+opengym_backup_ping_url: ""
+opengym_restore_test_ping_url: ""

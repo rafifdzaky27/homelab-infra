@@ -1,0 +1,10 @@
+---
+- name: Configure srv-gym-01 as the openGym Docker host
+  hosts: gym
+  become: true
+  roles:
+    - common
+    - docker
+    - opengym_host
+    - role: opengym_backup
+      tags: [backup]

@@ -1,0 +1,10 @@
+---
+# Non-secret openGym settings. Secrets live in group_vars/gym/vault.yml (not in git until
+# encrypted with ansible-vault). See roles/opengym_host/defaults/main.yml for all knobs.
+opengym_domain: "gym.rafifdzaky.com"
+# Step 8 of the runbook: after your own profile exists, put its id here and set invite_only: true.
+opengym_admin_uids: ""
+opengym_invite_only: false
+# healthchecks.io dead-man switch URLs (empty = no ping).
+opengym_backup_ping_url: ""
+opengym_restore_test_ping_url: ""

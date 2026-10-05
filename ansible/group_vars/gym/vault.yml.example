@@ -1,0 +1,7 @@
+# Copy to vault.yml, fill in, then: ansible-vault encrypt group_vars/gym/vault.yml
+# NEVER commit vault.yml in plain text. This repo is public.
+# Use the SAME vault password as group_vars/all/vault.yml (--ask-vault-pass takes one password).
+# Tunnel token: Cloudflare Zero Trust > Networks > Tunnels > opengym > the token in the install command.
+opengym_tunnel_token: "CHANGE-ME-eyJ..."
+# Generate with: openssl rand -base64 36 | tr -d '/+='
+opengym_restic_password: "CHANGE-ME-min-32-chars"
