@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: ${SPARKY_FITNESS_DB_NAME}
       POSTGRES_USER: ${SPARKY_FITNESS_DB_USER}
       POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+      PUID: 1000
+      GUID: 1000
     volumes:
       # Postgres 18 images expect the mount at /var/lib/postgresql, not .../data.
       - db_data:/var/lib/postgresql
@@ -43,6 +45,9 @@ services:
       SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_FITNESS_ADMIN_EMAIL}
       SPARKY_FITNESS_SERVER_PORT: "3010"
       TZ: ${TZ}
+      NODE_ENV: production
+      PUID: 1000
+      GUID: 1000
     volumes:
       - server_uploads:/app/SparkyFitnessServer/uploads
       - server_backup:/app/SparkyFitnessServer/backup
@@ -57,6 +62,8 @@ services:
       SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
       SPARKY_FITNESS_SERVER_HOST: sparkyfitness-server
       SPARKY_FITNESS_SERVER_PORT: "3010"
+      PUID: 1000
+      GUID: 1000
     ports:
       # Bound to the VM IP only. UFW does not filter Docker ports; see the DOCKER-USER unit.
       - "{{ sparky_bind_ip }}:{{ sparky_frontend_port }}:80"
