@@ -13,8 +13,8 @@ git checkout feat/sparkyfitness-srv-fit-01
 
 ## 1. Cek tag image (wajib sebelum apply)
 Buka Docker Hub dan pastikan dua tag ini ada:
-- `codewithcj/sparkyfitness_server:v0.17.3`
-- `codewithcj/sparkyfitness:v0.17.3`
+- `codewithcj/sparkyfitness_server:v1.7.3`
+- `codewithcj/sparkyfitness:v1.7.3`
 
 Kalau format tag beda, ubah `sparky_version` di `ansible/roles/sparky_host/defaults/main.yml`.
 Cek juga compose resmi SparkyFitness. Bandingkan nama variabel env dengan
