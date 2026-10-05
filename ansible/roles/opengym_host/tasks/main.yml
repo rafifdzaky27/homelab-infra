@@ -86,7 +86,10 @@
     project_src: "{{ opengym_root }}"
     state: present
     pull: missing
-    recreate: "{{ 'always' if (opengym_compose.changed or opengym_env.changed or opengym_api_env.changed) else 'auto' }}"
+    # auto, not always: compose hashes each service's resolved config (env_file content included)
+    # and recreates only what changed. `always` restarted cloudflared on an api.env change and
+    # took the site down long enough for UptimeRobot to alert.
+    recreate: auto
 
 # Not `wait: true`: the images' HEALTHCHECK runs every 5 minutes, so compose --wait sits in
 # "starting" that long. Ask the app itself, through nginx, the same path the tunnel uses.
