@@ -1,0 +1,9 @@
+# Copy to vault.yml, fill in, then: ansible-vault encrypt group_vars/fitness/vault.yml
+# NEVER commit vault.yml in plain text. This repo is public.
+# Generate with: openssl rand -hex 32 (api key), openssl rand -base64 32 (auth secret) /  openssl rand -base64 36 | tr -d '/+=' (passwords)
+sparky_db_password: "CHANGE-ME-min-32-chars"
+sparky_app_db_password: "CHANGE-ME-min-32-chars"
+sparky_api_encryption_key: "CHANGE-ME-64-hex-chars"
+sparky_better_auth_secret: "CHANGE-ME-from-openssl-rand-base64-32"
+sparky_restic_password: "CHANGE-ME-min-32-chars"
+sparky_admin_email: "you@example.com"   # your login email; keep real value only in the encrypted vault

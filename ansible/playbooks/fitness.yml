@@ -1,0 +1,10 @@
+---
+- name: Configure srv-fit-01 as the SparkyFitness Docker host
+  hosts: fitness
+  become: true
+  roles:
+    - common
+    - docker
+    - sparky_host
+    - role: sparky_backup
+      tags: [backup]

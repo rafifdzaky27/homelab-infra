@@ -1,0 +1,15 @@
+[Unit]
+Description=Restrict SparkyFitness published port to the Caddy proxy (DOCKER-USER)
+After=docker.service
+Requires=docker.service
+# Restart with docker (apt upgrades restart it), so the rule is always re-applied.
+# No ExecStop on purpose: stopping this unit must never open the port.
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/bin/bash -c '/usr/sbin/iptables -C DOCKER-USER ! -s {{ sparky_proxy_ip }} -p tcp -m conntrack --ctorigdstport {{ sparky_frontend_port }} --ctdir ORIGINAL -j DROP 2>/dev/null || /usr/sbin/iptables -I DOCKER-USER ! -s {{ sparky_proxy_ip }} -p tcp -m conntrack --ctorigdstport {{ sparky_frontend_port }} --ctdir ORIGINAL -j DROP'
+
+[Install]
+WantedBy=docker.service multi-user.target

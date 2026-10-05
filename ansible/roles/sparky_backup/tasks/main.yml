@@ -1,0 +1,123 @@
+---
+- name: Fail early when the restic password is missing or short
+  ansible.builtin.assert:
+    that:
+      - sparky_restic_password | length >= 32
+    quiet: true
+  no_log: true
+
+# acl: Ansible needs setfacl to become the unprivileged user for the restic init task.
+- name: Install restic, rclone and acl
+  ansible.builtin.apt:
+    name: [restic, rclone, acl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the backup config directory
+  ansible.builtin.file:
+    path: "{{ sparky_backup_conf_dir }}"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0700"
+
+- name: Create the local restic repository directory
+  ansible.builtin.file:
+    path: "{{ sparky_backup_repo }}"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0700"
+
+- name: Create the fixed staging directory (fixed path keeps restic forget grouping stable)
+  ansible.builtin.file:
+    path: "{{ sparky_backup_stage_dir }}"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0700"
+
+- name: Create the backup scripts directory
+  ansible.builtin.file:
+    path: "{{ sparky_root }}/backup"
+    state: directory
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0750"
+
+- name: Install the backup scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ sparky_root }}/backup/{{ item }}"
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0750"
+  loop:
+    - backup.sh
+    - restore-test.sh
+
+- name: Write the restic password file
+  ansible.builtin.copy:
+    dest: "{{ sparky_backup_conf_dir }}/restic-password"
+    content: "{{ sparky_restic_password }}\n"
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0400"
+  no_log: true
+
+- name: Write the backup environment file
+  ansible.builtin.copy:
+    dest: "{{ sparky_backup_conf_dir }}/env"
+    content: |
+      RESTIC_REPOSITORY={{ sparky_backup_repo }}
+      RESTIC_PASSWORD_FILE={{ sparky_backup_conf_dir }}/restic-password
+      RESTIC_OFFSITE_REPOSITORY={{ sparky_backup_offsite_repo }}
+      COMPOSE_DIR={{ sparky_root }}
+      STAGE_DIR={{ sparky_backup_stage_dir }}
+      DB_USER={{ sparky_db_user }}
+      DB_NAME={{ sparky_db_name }}
+      PG_IMAGE={{ sparky_postgres_image }}
+    owner: "{{ sparky_user }}"
+    group: "{{ sparky_user }}"
+    mode: "0600"
+
+- name: Initialise the local restic repository (once)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if restic cat config >/dev/null 2>&1; then echo exists; else restic init >/dev/null && echo created; fi
+  args:
+    executable: /bin/bash
+  environment:
+    RESTIC_REPOSITORY: "{{ sparky_backup_repo }}"
+    RESTIC_PASSWORD_FILE: "{{ sparky_backup_conf_dir }}/restic-password"
+  become: true
+  become_user: "{{ sparky_user }}"
+  register: sparky_restic_local
+  changed_when: "'created' in sparky_restic_local.stdout"
+
+- name: Install the backup and restore-test units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - sparky-backup.service
+    - sparky-backup.timer
+    - sparky-restore-test.service
+    - sparky-restore-test.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the timers see the new units
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - sparky-backup.timer
+    - sparky-restore-test.timer

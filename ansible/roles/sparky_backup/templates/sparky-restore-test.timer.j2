@@ -1,0 +1,9 @@
+[Unit]
+Description=SparkyFitness weekly restore test
+
+[Timer]
+OnCalendar={{ sparky_restore_test_on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

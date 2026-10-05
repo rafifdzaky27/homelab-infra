@@ -1,0 +1,16 @@
+---
+sparky_root: /opt/sparky
+sparky_user: devops
+# Pin image tags. Upstream ships :latest, which the playbook forbids.
+# VERIFY these tags exist on Docker Hub before the first apply (runbook step).
+sparky_version: "v1.7.3"
+sparky_postgres_image: "postgres:18.3-alpine"
+sparky_bind_ip: "192.168.18.27"
+sparky_frontend_port: 3004
+sparky_proxy_ip: "192.168.18.14"
+sparky_timezone: "Asia/Jakarta"
+sparky_db_name: sparkyfitness_db
+sparky_db_user: sparky
+sparky_app_db_user: sparky_app
+sparky_disable_signup: false
+sparky_log_level: info

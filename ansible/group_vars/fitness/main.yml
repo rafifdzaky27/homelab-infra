@@ -1,0 +1,9 @@
+---
+# Non-secret SparkyFitness settings. Secrets live in group_vars/fitness/vault.yml (not in git
+# until encrypted with ansible-vault). See roles/sparky_host/defaults/main.yml for all knobs.
+sparky_frontend_url: "https://fit.rafifdzaky.com"
+# Set to true after the first account is created (step in the runbook).
+sparky_disable_signup: false
+# healthchecks.io dead-man switch URLs (empty = no ping).
+sparky_backup_ping_url: ""
+sparky_restore_test_ping_url: ""

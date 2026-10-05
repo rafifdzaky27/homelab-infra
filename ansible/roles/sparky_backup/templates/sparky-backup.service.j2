@@ -1,0 +1,19 @@
+[Unit]
+Description=SparkyFitness nightly backup (pg_dump -> restic)
+Wants=network-online.target
+After=network-online.target docker.service
+StartLimitIntervalSec=2h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+User={{ sparky_user }}
+EnvironmentFile={{ sparky_backup_conf_dir }}/env
+ExecStart=/bin/bash {{ sparky_root }}/backup/backup.sh
+{% if sparky_backup_ping_url %}
+ExecStartPost=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null {{ sparky_backup_ping_url }}
+{% endif %}
+Restart=on-failure
+RestartSec=10min
+Nice=10
+IOSchedulingClass=idle
