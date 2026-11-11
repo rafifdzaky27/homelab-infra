@@ -1,0 +1,21 @@
+# Salin ke network.auto.tfvars (diabaikan git) dan ganti dengan nilai jaringan milikmu.
+# Alamat di bawah memakai blok dokumentasi RFC 5737 (192.0.2.0/24), bukan jaringan nyata.
+pm_api_url  = "https://192.0.2.10:8006/api2/json"
+pm_token_id = "terraform@pve!tftoken"
+pm_node     = "pve"
+gateway_ip  = "192.0.2.1"
+
+vm_ips = {
+  dns              = "192.0.2.11"
+  dns2             = "192.0.2.12"
+  vpn              = "192.0.2.18"
+  wg               = "192.0.2.21"
+  proxy            = "192.0.2.14"
+  fitness          = "192.0.2.27"
+  opengym          = "192.0.2.28"
+  pitwall          = "192.0.2.25"
+  jellyfin_private = "192.0.2.13"
+  jellyfin_shared  = "192.0.2.26"
+}
+
+# pm_token jangan ditulis di sini: export TF_VAR_pm_token='...'

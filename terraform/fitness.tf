@@ -1,7 +1,7 @@
 # fitness.tf - SparkyFitness Docker host (interlude after P05)
 resource "proxmox_vm_qemu" "fitness" {
   name        = "srv-fit-01"
-  target_node = "pve"
+  target_node = var.pm_node
 
   clone      = "ubuntu-template"
   full_clone = true
@@ -41,7 +41,7 @@ resource "proxmox_vm_qemu" "fitness" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.27/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["fitness"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))
