@@ -1,7 +1,7 @@
 # opengym.tf - openGym Docker host, public via its own Cloudflare Tunnel
 resource "proxmox_vm_qemu" "opengym" {
   name        = "srv-gym-01"
-  target_node = "pve"
+  target_node = var.pm_node
 
   clone      = "ubuntu-template"
   full_clone = true
@@ -41,7 +41,7 @@ resource "proxmox_vm_qemu" "opengym" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.28/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["opengym"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))

@@ -26,3 +26,6 @@ override.tf.json
 # Environment / secrets
 .env
 .env.*
+# Nilai jaringan dan identitas asli (hanya lokal; ada versi .example/placeholder yang di-commit)
+ansible/inventory.local.ini
+ansible/group_vars/**/zz-local.yml

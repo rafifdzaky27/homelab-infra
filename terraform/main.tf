@@ -1,6 +1,6 @@
 resource "proxmox_vm_qemu" "dns" {
   name        = "srv-dns-01"
-  target_node = "pve"
+  target_node = var.pm_node
 
   clone      = "ubuntu-template"
   full_clone = true
@@ -39,7 +39,7 @@ resource "proxmox_vm_qemu" "dns" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.11/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["dns"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))
@@ -48,7 +48,7 @@ resource "proxmox_vm_qemu" "dns" {
 
 resource "proxmox_vm_qemu" "dns2" {
   name        = "srv-dns-02"
-  target_node = "pve"
+  target_node = var.pm_node
 
   clone      = "ubuntu-template"
   full_clone = true
@@ -89,7 +89,7 @@ resource "proxmox_vm_qemu" "dns2" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.12/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["dns2"]}/24,gw=${var.gateway_ip}"
 
   ciuser  = "devops"
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))
@@ -98,7 +98,7 @@ resource "proxmox_vm_qemu" "dns2" {
 
 resource "proxmox_vm_qemu" "vpn_gw" {
   name        = "srv-vpn-01"
-  target_node = "pve"
+  target_node = var.pm_node
   clone       = "ubuntu-template"
 
   memory = 512
@@ -136,7 +136,7 @@ resource "proxmox_vm_qemu" "vpn_gw" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.18/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["vpn"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))
@@ -145,7 +145,7 @@ resource "proxmox_vm_qemu" "vpn_gw" {
 
 resource "proxmox_vm_qemu" "wg" {
   name        = "srv-wg-01"
-  target_node = "pve"
+  target_node = var.pm_node
   clone       = "ubuntu-template"
 
   memory = 512
@@ -183,7 +183,7 @@ resource "proxmox_vm_qemu" "wg" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.21/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["wg"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))
@@ -192,7 +192,7 @@ resource "proxmox_vm_qemu" "wg" {
 
 resource "proxmox_vm_qemu" "proxy" {
   name        = "srv-proxy-01"
-  target_node = "pve"
+  target_node = var.pm_node
 
   clone      = "ubuntu-template"
   full_clone = true
@@ -232,7 +232,7 @@ resource "proxmox_vm_qemu" "proxy" {
   }
 
   os_type   = "cloud-init"
-  ipconfig0 = "ip=192.168.18.14/24,gw=192.168.18.1"
+  ipconfig0 = "ip=${var.vm_ips["proxy"]}/24,gw=${var.gateway_ip}"
   ciuser    = "devops"
 
   sshkeys = file(pathexpand("~/.ssh/id_ed25519_homelab.pub"))

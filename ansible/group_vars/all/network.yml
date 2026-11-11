@@ -1,0 +1,14 @@
+---
+# Nilai jaringan bawaan berupa PLACEHOLDER dokumentasi (RFC 5737 / .example), aman untuk repo publik.
+# Nilai asli ditaruh di group_vars/all/zz-local.yml (diabaikan git). Berkas "zz-" dimuat paling akhir,
+# jadi menimpa yang ada di sini.
+internal_domain: home.example
+homelab_lan_cidr: 192.0.2.0/24
+# Host di belakang Caddy yang tidak dikelola inventory ini (Nextcloud, Home Assistant, Grafana, Git).
+homelab_extra_hosts:
+  nextcloud: 192.0.2.19
+  homeassistant: 192.0.2.15
+  grafana: 192.0.2.16
+  git: 192.0.2.17
+# Jawaban DNS wildcard *.<internal_domain> di AdGuard (IP reverse proxy).
+adguard_rewrite_answer: 192.0.2.14
