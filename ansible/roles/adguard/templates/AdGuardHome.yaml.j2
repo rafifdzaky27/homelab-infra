@@ -13,8 +13,8 @@ dns:
   bootstrap_dns: [1.1.1.1, 8.8.8.8]
 filtering:
   rewrites:
-    - domain: "*.home.arpa"
-      answer: 192.168.1.14
+    - domain: "*.{{ internal_domain }}"
+      answer: {{ adguard_rewrite_answer }}
 filters:
   - enabled: true
     url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt

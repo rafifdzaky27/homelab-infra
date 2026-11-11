@@ -6,46 +6,46 @@
 }
 
 # Jellyfin Private — Tailscale only
-jellyfin-private.home.arpa {
+jellyfin-private.{{ internal_domain }} {
     tls internal
-    reverse_proxy 192.168.18.13:8096
+    reverse_proxy {{ hostvars['srv-media-private'].ansible_host }}:8096
 }
 
 # Jellyfin Shared — internal / Tailscale
-jellyfin-shared.home.arpa {
+jellyfin-shared.{{ internal_domain }} {
     tls internal
-    reverse_proxy 192.168.18.26:8096
+    reverse_proxy {{ hostvars['srv-media-shared'].ansible_host }}:8096
 }
 
-cloud.home.arpa {
+cloud.{{ internal_domain }} {
     tls internal
-    reverse_proxy 192.168.18.19:8090
+    reverse_proxy {{ homelab_extra_hosts.nextcloud }}:8090
 }
 
-ha.home.arpa {
+ha.{{ internal_domain }} {
     tls internal
-    reverse_proxy 192.168.18.15:8123
-}
-
-# Management / Tailscale only
-grafana.home.arpa {
-    tls internal
-    reverse_proxy 192.168.18.16:3000
+    reverse_proxy {{ homelab_extra_hosts.homeassistant }}:8123
 }
 
 # Management / Tailscale only
-git.home.arpa {
+grafana.{{ internal_domain }} {
     tls internal
-    reverse_proxy 192.168.18.17:3000
+    reverse_proxy {{ homelab_extra_hosts.grafana }}:3000
+}
+
+# Management / Tailscale only
+git.{{ internal_domain }} {
+    tls internal
+    reverse_proxy {{ homelab_extra_hosts.git }}:3000
 }
 
 # Endpoint metrics untuk Prometheus nanti
-http://metrics.home.arpa {
+http://metrics.{{ internal_domain }} {
     metrics
 }
 
 # Backend sementara untuk verifikasi P04
-test.home.arpa {
+test.{{ internal_domain }} {
     tls internal
     reverse_proxy 127.0.0.1:5000
 }
@@ -63,7 +63,7 @@ fit.rafifdzaky.com {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
-    reverse_proxy 192.168.18.27:3004
+    reverse_proxy {{ hostvars['srv-fit-01'].ansible_host }}:3004
 }
 
 # Portfolio - public via Cloudflare Tunnel (cloudflared on this host -> 127.0.0.1:8081).

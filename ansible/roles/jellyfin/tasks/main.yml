@@ -103,7 +103,7 @@
 - name: Allow Jellyfin HTTP from the trusted LAN
   community.general.ufw:
     rule: allow
-    src: "192.168.18.0/24"
+    src: "{{ homelab_lan_cidr }}"
     port: "8096"
     proto: tcp
 
