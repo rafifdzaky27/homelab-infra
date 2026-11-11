@@ -1,6 +1,6 @@
 # Runbook: Caddy di srv-proxy-01
 
-Host `srv-proxy-01` (192.168.18.14). Ansible dijalankan dari WSL.
+Host `srv-proxy-01` (<srv-proxy-01-ip>). Ansible dijalankan dari WSL.
 Runbook ini mendokumentasikan konfigurasi dan insiden yang sudah diperbaiki. Daftar site bukan bukti semua backend sedang sehat.
 
 ## Site dalam template
@@ -9,15 +9,15 @@ Source: `ansible/roles/caddy/templates/Caddyfile.j2`.
 
 | Site | Backend / fungsi |
 |---|---|
-| `jellyfin-private.home.arpa` | 192.168.18.13:8096 |
-| `jellyfin-shared.home.arpa` | 192.168.18.26:8096 |
-| `cloud.home.arpa` | 192.168.18.19:8090 |
-| `ha.home.arpa` | 192.168.18.15:8123 |
-| `grafana.home.arpa` | 192.168.18.16:3000 |
-| `git.home.arpa` | 192.168.18.17:3000 |
-| `http://metrics.home.arpa` | Endpoint metrics |
-| `test.home.arpa`, `test.rafifdzaky.com` | Backend verifikasi P04 di 127.0.0.1:5000 |
-| `fit.rafifdzaky.com` | SparkyFitness di 192.168.18.27:3004; internal, tanpa public A record atau Tunnel |
+| `jellyfin-private.<internal-domain>` | <srv-media-private-ip>:8096 |
+| `jellyfin-shared.<internal-domain>` | <srv-media-shared-ip>:8096 |
+| `cloud.<internal-domain>` | <nextcloud-ip>:8090 |
+| `ha.<internal-domain>` | <homeassistant-ip>:8123 |
+| `grafana.<internal-domain>` | <grafana-ip>:3000 |
+| `git.<internal-domain>` | <git-ip>:3000 |
+| `http://metrics.<internal-domain>` | Endpoint metrics |
+| `test.<internal-domain>`, `test.rafifdzaky.com` | Backend verifikasi P04 di 127.0.0.1:5000 |
+| `fit.rafifdzaky.com` | SparkyFitness di <srv-fit-01-ip>:3004; internal, tanpa public A record atau Tunnel |
 | `rafifdzaky.com`, `www.rafifdzaky.com` | Portfolio pada listener lokal port 8081; file statis `/srv/www/portfolio/current`; www redirect ke domain utama |
 
 Jalur portfolio: Cloudflare → Cloudflare Tunnel → cloudflared pada srv-proxy-01 → Caddy `127.0.0.1:8081` → `/srv/www/portfolio/current`.
@@ -31,7 +31,7 @@ Portfolio memakai literal `root /srv/www/portfolio/current` dalam template. Jang
 ## 1. Preflight dan review diff (WSL)
 
 ```bash
-cd /mnt/c/Users/Rafif/Downloads/homelab-infra/ansible
+cd /mnt/c/Users/<windows-user>/Downloads/homelab-infra/ansible
 export ANSIBLE_CONFIG=$PWD/ansible.cfg
 ansible-playbook playbooks/caddy.yml --ask-vault-pass --check --diff
 ```

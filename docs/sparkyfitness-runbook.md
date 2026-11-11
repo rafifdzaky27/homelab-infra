@@ -1,6 +1,6 @@
 # Runbook: SparkyFitness di srv-fit-01
 
-VM `srv-fit-01` (192.168.18.27). URL `https://fit.rafifdzaky.com`, hanya internal.
+VM `srv-fit-01` (<srv-fit-01-ip>). URL `https://fit.rafifdzaky.com`, hanya internal.
 Jalur: iPhone → Tailscale → Caddy (.14) → VM .27 port 3004.
 Terraform di PowerShell. Ansible di WSL. Ikuti urutan, jangan lompat langkah.
 
@@ -24,7 +24,7 @@ Tidak bisa diuji dari luar homelab (ada cek di langkah terkait):
 
 ## 0. Persiapan terminal WSL (tiap buka terminal baru)
 ```bash
-cd /mnt/c/Users/Rafif/Downloads/homelab-infra
+cd /mnt/c/Users/<windows-user>/Downloads/homelab-infra
 git fetch origin && git checkout feat/sparkyfitness-srv-fit-01 && git pull
 cd ansible
 export ANSIBLE_CONFIG=$PWD/ansible.cfg
@@ -35,7 +35,7 @@ Expected: dua collection muncul. Kalau tidak: `ansible-galaxy collection install
 
 ## 1. Buat VM (Terraform, PowerShell)
 ```powershell
-cd C:\Users\Rafif\Downloads\homelab-infra\terraform
+cd C:\Users\<windows-user>\Downloads\homelab-infra\terraform
 terraform plan
 ```
 Expected: hanya `proxmox_vm_qemu.fitness` yang ditambah. Kalau ada perubahan lain, berhenti.
@@ -45,12 +45,12 @@ terraform apply
 
 ## 2. SSH pertama ke VM (WSL, wajib sebelum Ansible)
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27 'cloud-init status --wait; hostname'
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-fit-01-ip> 'cloud-init status --wait; hostname'
 ```
 - Ketik `yes` saat ditanya host key. Ansible tidak bisa menjawab prompt ini sendiri.
 - `cloud-init status --wait` menunggu cloud-init selesai, supaya apt tidak terkunci saat Ansible jalan.
 - Expected: `status: done` lalu `srv-fit-01`.
-- Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED": `ssh-keygen -R 192.168.18.27`, lalu ulangi.
+- Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED": `ssh-keygen -R <srv-fit-01-ip>`, lalu ulangi.
 
 ## 3. Buat secret (WSL)
 ```bash
@@ -76,19 +76,19 @@ Expected: `failed=0`. Pull image pertama butuh beberapa menit.
 
 Verify:
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27 \
-  'docker ps --format "{{.Names}} {{.Status}}"; sudo iptables -S DOCKER-USER; systemctl list-timers "sparky*" --no-pager; curl -s http://192.168.18.27:3004/api/health'
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-fit-01-ip> \
+  'docker ps --format "{{.Names}} {{.Status}}"; sudo iptables -S DOCKER-USER; systemctl list-timers "sparky*" --no-pager; curl -s http://<srv-fit-01-ip>:3004/api/health'
 ```
-Expected: 3 container `healthy`, satu baris `DROP` dengan `! -s 192.168.18.14/32 ... 3004`, dua timer sparky, dan `{"status":"UP"}`.
+Expected: 3 container `healthy`, satu baris `DROP` dengan `! -s <srv-proxy-01-ip>/32 ... 3004`, dua timer sparky, dan `{"status":"UP"}`.
 
 ## 5. Tes firewall (wajib, sebelum Caddy dan DNS)
 Dari WSL (bukan .14), harus timeout:
 ```bash
-curl -m 5 http://192.168.18.27:3004 ; echo "exit=$?"     # expected exit=28
+curl -m 5 http://<srv-fit-01-ip>:3004 ; echo "exit=$?"     # expected exit=28
 ```
 Dari srv-proxy-01, harus 200:
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.14 'curl -s -o /dev/null -w "%{http_code}\n" http://192.168.18.27:3004/'
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-proxy-01-ip> 'curl -s -o /dev/null -w "%{http_code}\n" http://<srv-fit-01-ip>:3004/'
 ```
 Kalau tes pertama dapat 200, berhenti. Port terbuka ke LAN.
 
@@ -103,20 +103,20 @@ Expected: diff Caddyfile hanya menambah blok `fit.rafifdzaky.com`. Kalau ada bar
 Kalau aman:
 ```bash
 ansible-playbook playbooks/caddy.yml --ask-vault-pass
-curl -sI --resolve fit.rafifdzaky.com:443:192.168.18.14 https://fit.rafifdzaky.com | head -1
+curl -sI --resolve fit.rafifdzaky.com:443:<srv-proxy-01-ip> https://fit.rafifdzaky.com | head -1
 ```
 Expected: `HTTP/2 200` tanpa `-k`. Ini membuktikan sertifikat publik dan Caddy sebelum DNS lokal dipasang (pola P04 Step 9).
-Kalau gagal: `ssh devops@192.168.18.14 'journalctl -u caddy -n 50 --no-pager'`.
+Kalau gagal: `ssh devops@<srv-proxy-01-ip> 'journalctl -u caddy -n 50 --no-pager'`.
 
 ## 7. DNS lokal (manual di UI, kedua resolver)
-Jangan jalankan `adguard.yml`. Template AdGuard di repo menimpa seluruh config live dan masih menjawab `*.home.arpa` ke `192.168.1.14`. Menjalankannya bisa mematikan semua nama `home.arpa`.
-- AdGuard `http://192.168.18.11:3000` → Filters → DNS rewrites → Add: `fit.rafifdzaky.com` → `192.168.18.14`.
-- Pi-hole `http://192.168.18.12/admin` → Settings → Local DNS Records → `fit.rafifdzaky.com` → `192.168.18.14`.
+Jangan jalankan `adguard.yml`. Template AdGuard di repo menimpa seluruh config live dan masih menjawab `*.<internal-domain>` ke `<alamat-lama-yang-salah>`. Menjalankannya bisa mematikan semua nama `<internal-domain>`.
+- AdGuard `http://<srv-dns-01-ip>:3000` → Filters → DNS rewrites → Add: `fit.rafifdzaky.com` → `<srv-proxy-01-ip>`.
+- Pi-hole `http://<srv-dns-02-ip>/admin` → Settings → Local DNS Records → `fit.rafifdzaky.com` → `<srv-proxy-01-ip>`.
 - Jangan buat record publik di Cloudflare. Jangan buat wildcard `*.rafifdzaky.com`.
 Verify:
 ```bash
-dig +short @192.168.18.11 fit.rafifdzaky.com     # 192.168.18.14
-dig +short @192.168.18.12 fit.rafifdzaky.com     # 192.168.18.14
+dig +short @<srv-dns-01-ip> fit.rafifdzaky.com     # <srv-proxy-01-ip>
+dig +short @<srv-dns-02-ip> fit.rafifdzaky.com     # <srv-proxy-01-ip>
 dig +short @1.1.1.1 fit.rafifdzaky.com           # kosong
 curl -sI https://fit.rafifdzaky.com | head -1     # HTTP/2 200
 ```
@@ -154,7 +154,7 @@ Lingkar perut: 25 Sep 103.5, 27 Sep 97, 5 Okt 100.
 
 ## 11. Uji backup
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.27
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-fit-01-ip>
 sudo systemctl start sparky-backup.service; journalctl -u sparky-backup -n 5 --no-pager
 sudo systemctl start sparky-restore-test.service; journalctl -u sparky-restore-test -n 5 --no-pager
 ```
@@ -168,9 +168,9 @@ Backup masih lokal di disk VM. Backup ke GDrive (`sparky_backup_offsite_repo`) m
 
 ## Rollback
 ```bash
-ssh devops@192.168.18.27 'cd /opt/sparky && docker compose down'
+ssh devops@<srv-fit-01-ip> 'cd /opt/sparky && docker compose down'
 ```
 Hapus blok `fit.rafifdzaky.com` dari Caddyfile, jalankan `caddy.yml`, lalu hapus record DNS di AdGuard dan Pi-hole.
 Hapus VM: hapus `terraform/fitness.tf`, lalu `terraform apply`. Data ikut hilang, simpan backup dulu.
 Unit firewall sengaja tidak menghapus aturannya saat di-stop. Hapus manual kalau perlu:
-`sudo iptables -D DOCKER-USER ! -s 192.168.18.14 -p tcp -m conntrack --ctorigdstport 3004 --ctdir ORIGINAL -j DROP`
+`sudo iptables -D DOCKER-USER ! -s <srv-proxy-01-ip> -p tcp -m conntrack --ctorigdstport 3004 --ctdir ORIGINAL -j DROP`

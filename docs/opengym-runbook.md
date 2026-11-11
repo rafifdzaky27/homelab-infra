@@ -1,6 +1,6 @@
 # Runbook: openGym di srv-gym-01
 
-VM `srv-gym-01` (192.168.18.28). URL `https://gym.rafifdzaky.com`, **publik**, tanpa Tailscale.
+VM `srv-gym-01` (<srv-gym-01-ip>). URL `https://gym.rafifdzaky.com`, **publik**, tanpa Tailscale.
 Jalur: iPhone (Safari PWA) → Cloudflare → tunnel `opengym` → container `cloudflared` → `web:80` (nginx) → `api:3000`.
 Tidak ada port yang dibuka ke LAN. Tidak lewat Caddy di srv-proxy-01.
 Terraform di PowerShell. Ansible di WSL. Ikuti urutan, jangan lompat langkah.
@@ -24,7 +24,7 @@ Tidak bisa diuji dari luar homelab: tunnel, passkey di iPhone, dan playbook di V
 
 ## 0. Persiapan terminal WSL (tiap buka terminal baru)
 ```bash
-cd /mnt/c/Users/Rafif/Downloads/homelab-infra
+cd /mnt/c/Users/<windows-user>/Downloads/homelab-infra
 git fetch origin && git checkout feat/opengym-srv-gym-01 && git pull
 cd ansible
 export ANSIBLE_CONFIG=$PWD/ansible.cfg
@@ -32,9 +32,9 @@ export ANSIBLE_CONFIG=$PWD/ansible.cfg
 Kenapa `ANSIBLE_CONFIG`: folder di `/mnt/c` world-writable, jadi Ansible mengabaikan `ansible.cfg`.
 
 ## 1. Buat VM (Terraform, PowerShell)
-Pastikan `192.168.18.28` di luar range DHCP router. Waktu runbook ditulis, IP ini tidak membalas ping.
+Pastikan `<srv-gym-01-ip>` di luar range DHCP router. Waktu runbook ditulis, IP ini tidak membalas ping.
 ```powershell
-cd C:\Users\Rafif\Downloads\homelab-infra\terraform
+cd C:\Users\<windows-user>\Downloads\homelab-infra\terraform
 terraform plan
 ```
 Expected: hanya `proxmox_vm_qemu.opengym` yang ditambah. Kalau ada perubahan lain, berhenti.
@@ -44,11 +44,11 @@ terraform apply
 
 ## 2. SSH pertama ke VM (WSL, wajib sebelum Ansible)
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 'cloud-init status --wait; hostname'
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-gym-01-ip> 'cloud-init status --wait; hostname'
 ```
 - Ketik `yes` saat ditanya host key.
 - Expected: `status: done` lalu `srv-gym-01`.
-- Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED": `ssh-keygen -R 192.168.18.28`, lalu ulangi.
+- Kalau muncul "REMOTE HOST IDENTIFICATION HAS CHANGED": `ssh-keygen -R <srv-gym-01-ip>`, lalu ulangi.
 
 ## 3. Tunnel Cloudflare (browser)
 1. Cloudflare Zero Trust → Networks → Tunnels → **Create a tunnel** → Cloudflared. Nama: `opengym`.
@@ -83,14 +83,14 @@ Expected: `failed=0`, dan task "Wait until web answers /api/health" ok.
 
 Verify:
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 \
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-gym-01-ip> \
   'cd /opt/opengym && docker compose ps -a --format "{{.Service}} {{.Status}}"; docker compose logs --tail 5 cloudflared; systemctl list-timers "opengym*" --no-pager'
 ```
 Expected: `api` dan `web` Up, `media` Exited (0), `cloudflared` Up dengan log `Registered tunnel connection` (4 baris), dan dua timer opengym.
 
 Tidak ada port terbuka ke LAN. Harus gagal (timeout, karena UFW default deny):
 ```bash
-curl -m 5 http://192.168.18.28 ; curl -m 5 http://192.168.18.28:8080 ; echo "exit=$?"
+curl -m 5 http://<srv-gym-01-ip> ; curl -m 5 http://<srv-gym-01-ip>:8080 ; echo "exit=$?"
 ```
 
 Dari luar:
@@ -107,7 +107,7 @@ Expected: `{"ok":true,"users":0}`.
 
 ## 7. Cari user id kamu
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 \
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-gym-01-ip> \
   'sudo python3 -c "import json;[print(u[\"id\"],u.get(\"name\")) for u in json.load(open(\"/opt/opengym/data/db.json\"))[\"users\"]]"'
 ```
 Expected: **satu** baris, nama profilmu. Kalau ada lebih dari satu, ada orang lain yang mendaftar. Berhenti dan kirim output-nya.
@@ -132,7 +132,7 @@ Commit `main.yml` dan `vault.yml` (terenkripsi), lalu push.
 
 ## 10. Uji backup
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-gym-01-ip>
 sudo systemctl start opengym-backup.service; journalctl -u opengym-backup -n 5 --no-pager
 sudo systemctl start opengym-restore-test.service; journalctl -u opengym-restore-test -n 5 --no-pager
 ```
@@ -147,7 +147,7 @@ Backup masih lokal di disk VM. Offsite ke GDrive (`opengym_backup_offsite_repo`)
 
 ## Rollback
 ```bash
-ssh -i ~/.ssh/id_ed25519_homelab devops@192.168.18.28 'cd /opt/opengym && docker compose down'
+ssh -i ~/.ssh/id_ed25519_homelab devops@<srv-gym-01-ip> 'cd /opt/opengym && docker compose down'
 ```
 Hapus public hostname dan tunnel `opengym` di Cloudflare. Record DNS `gym` ikut dihapus.
 Hapus VM: hapus `terraform/opengym.tf`, lalu `terraform apply`. Data ikut hilang, simpan backup dulu.
